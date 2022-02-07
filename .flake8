@@ -1,0 +1,9 @@
+[flake8]
+per-file-ignores =
+    daceypy/core.py:E501
+    daceypy/_DA.py:E501
+    daceypy/_array.py:E501
+    daceypy/_compiledDA.py:E501
+    daceypy/_DACEException.py:E501
+    Tutorials/Tutorial1/daceypy_import_helper.py:F401
+    Tutorials/Tutorial2/daceypy_import_helper.py:F401
