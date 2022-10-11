@@ -240,7 +240,7 @@ class compiledDA(metaclass=PrettyType):
                 p += 1
 
             # higher order terms
-            for i in range(self.terms):
+            for i in range(1, self.terms):
                 jl = int(self.ac[p])
                 p += 1
                 jv = int(self.ac[p]) - 1
