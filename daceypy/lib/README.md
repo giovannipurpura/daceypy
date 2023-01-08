@@ -15,4 +15,4 @@ every reference to those libraries is removed.
 ## Reference version
 
 The version of DACE used to compile the core is:
-https://github.com/dacelib/dace/tree/ab9146dd26cc57a26df92ea1fc1b0f1af8f47622
+https://github.com/dacelib/dace/tree/2bda904d411d915b94bdf99d84209875a3243178
