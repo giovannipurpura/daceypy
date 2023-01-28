@@ -10,9 +10,9 @@ DACEyPy is a Python wrapper of DACE, the Differential Algebra Computational Tool
 ## Setup
 
 DACEyPy requires Python >= 3.7, running under:
-- Windows (32 or 64 bit),
-- Linux (32 or 64 bit),
-- MacOs (64 bit).
+- Windows (x86, x64, ARM64),
+- Linux (x86, x64, ARM64),
+- MacOs (x64, ARM64).
 
 To use this library in other architectures, it is necessary to recompile the
 DACE core (as a dynamic-link library) and set the path in the code, see the lib folder.

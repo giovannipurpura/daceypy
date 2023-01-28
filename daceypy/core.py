@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import sys
 from ctypes import (POINTER, Structure, c_bool, c_char_p, c_double, c_int,
                     c_uint, c_void_p, cdll)
 from inspect import getsourcefile
@@ -22,29 +21,23 @@ from pathlib import Path
 from typing import Callable
 
 from . import _DACEException
-
-if sys.platform == "win32":
-    if sys.maxsize > 2**32:
-        library_name = "dace_win64.dll"
-    else:
-        library_name = "dace_win32.dll"
-elif sys.platform == "linux":
-    if sys.maxsize > 2**32:
-        library_name = "dace_linux64.so"
-    else:
-        library_name = "dace_linux32.so"
-elif sys.platform == "darwin":
-    if sys.maxsize > 2**32:
-        library_name = "dace_darwin64.dylib"
-    else:
-        raise Exception("PyDACE is not compatible with 32bit MacOS")
-else:
-    raise Exception("PyDACE is not compatible with " + sys.platform)
+from .get_platform import get_platform
 
 sourcefile = getsourcefile(lambda: 0)
 assert sourcefile is not None
 libfolder = Path(sourcefile).resolve().parent / "lib"
-DAlib = cdll.LoadLibrary(str(libfolder / library_name))
+system, machine = get_platform()
+
+try:
+    library = next(libfolder.glob(f"dace_{system}-{machine}*"))
+except StopIteration:
+    raise Exception(
+        f"DACEyPy does not support this architecture ({system} {machine}).\n"
+        "Supported architectures:\n" + "\n".join(
+            " - " + lib.stem[5:].replace("-", " ")
+            for lib in libfolder.glob(f"dace_*")))
+
+DAlib = cdll.LoadLibrary(str(library))
 
 
 class dmonomial(Structure):
