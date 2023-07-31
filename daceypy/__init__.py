@@ -34,6 +34,7 @@ __all__ = (
     "zeros",
     "identity",
     "op",
+    "ADS",
 )
 
 from ._version import __version__
