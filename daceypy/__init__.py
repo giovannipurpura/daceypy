@@ -44,6 +44,7 @@ from ._compiledDA import compiledDA
 from ._array import array
 from ._Monomial import Monomial
 from . import op
+from ._ADS import ADS
 
 init = DA.init
 isInitialized = DA.isInitialized

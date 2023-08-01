@@ -1058,7 +1058,8 @@ class array(NDArray[np.object_], metaclass=PrettyType):
 
     def getTruncationErrors(self, type_: int = 0) -> NDArray[np.double]:
         """
-        Return a numpy array with truncation errors computed according to different norms for each of the elements of the input vector of DA
+        Return a NumPy array with truncation errors computed
+        according to the given norm for each of the elements of the DA vector.
 
         Args:
             type_: type of the norm to be used, see documentation for DA.estimNorm.
@@ -1066,13 +1067,14 @@ class array(NDArray[np.object_], metaclass=PrettyType):
         Raises:
             DACEException
         """
-        Errors = np.empty(self.shape[0])
+        errors = np.empty(self.shape[0])
         ord = daceypy.DA.getTO()
-        for i in range(self.shape[0]):
-            err, _ = self[i].estimNorm(0, type_, ord + 1)
-            Errors[i]=err[-1]
-        return Errors
-    
+        el: daceypy.DA
+        for i, el in enumerate(self):
+            err, _ = el.estimNorm(0, type_, ord + 1)
+            errors[i] = err[-1]
+        return errors
+
     # *************************************************************************
     # *     Static factory routines
     # *************************************************************************

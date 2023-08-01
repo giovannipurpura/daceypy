@@ -7,6 +7,8 @@ Python wrapper of DACE, the Differential Algebra Computational Toolbox.
 DACEyPy is a Python wrapper of DACE, the Differential Algebra Computational Toolbox
 (https://github.com/dacelib/dace).
 
+Additionally, since DACEyPy 1.1.0, the Adaptive Domain Splitting (ADS) library is included.
+
 ## Setup
 
 DACEyPy requires Python >= 3.7, running under:
