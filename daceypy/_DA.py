@@ -796,23 +796,23 @@ class DA(metaclass=PrettyType):
         for kw, val in kwargs.items():
             if kw == "i":
                 i = val
-                if not isinstance(i, int) or i is not None:
+                if not isinstance(i, int):
                     raise TypeError(
                         "Keyword argument i must be of type int, "
-                        f"(\"{type(i)}\") was given")
+                        f"\"{type(i).__name__}\" was given")
             elif kw == "c":
                 c = val
-                if not isinstance(c, float) or c is not None:
+                if not isinstance(c, float):
                     raise TypeError(
                         "Keyword argument c must be of type float, "
-                        f"(\"{type(c)}\") was given")
+                        f"\"{type(c).__name__}\" was given")
             elif kw == "da":
                 da = val
-                if not isinstance(c, (DA, bytes, str)) or c is not None:
+                if not isinstance(da, (DA, bytes, str)):
                     raise TypeError(
                         "Keyword argument da must be of type "
                         "DA or bytes or str, "
-                        f"(\"{type(da)}\") was given")
+                        f"\"{type(da).__name__}\" was given")
                 if args or len(kwargs) > 1:
                     raise TypeError(
                         "No other argument can be passed when da is used")
