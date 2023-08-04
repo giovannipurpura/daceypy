@@ -3,7 +3,7 @@ import daceypy_import_helper  # noqa: F401
 from typing import Callable
 
 import numpy as np
-from daceypy import DA, array, RK, integrator
+from daceypy import DA, array
 
 mu = 398600.0  # km^3/s^2
 
@@ -189,22 +189,6 @@ def TBP(x: array, t: float) -> array:
     dx = vel.concat(acc)
     return dx
 
-def TBP_float(x: NDArray[np.double], t: float) -> array:
-    pos: np.ndarray = x[:3]
-    vel: np.ndarray = x[3:]
-    r = np.linalg.norm(pos)
-    acc: np.ndarray = -mu * pos / (r ** 3)
-    dx = np.concatenate((vel,acc),0)
-    return dx
-
-class TBP_integrator(integrator):
-    def __init__(self, RK: RK.RKCoeff = RK.RK78()):
-        super(TBP_integrator, self).__init__(RK)
-
-    def f(self, x, t):
-        return TBP_float(x,t)
-
-
 
 def main():
 
@@ -221,19 +205,6 @@ def main():
     a = 6678 / (1 - ecc)
     with DA.cache_manager():  # optional, for efficiency
         xf = RK78(x0, 0.0, np.pi * np.sqrt(a**3 / mu), TBP)
-
-    
-    x0=np.zeros(6)
-    x0[0] += 6678.0  # 300 km altitude
-    x0[4] += np.sqrt(mu / 6678.0 * (1 + ecc))
-
-    propagator_78=TBP_integrator(RK.RK78())
-    propagator_78.loadTime(0.0, np.pi * np.sqrt(a**3 / mu))
-    propagator_78.loadTol(20*1e-12, 1e-12)
-    propagator_78.loadStepSize()
-    t0=time.time()
-    xf2=propagator_78.propagate(x0,0.0, np.pi * np.sqrt(a**3 / mu))
-    print(time.time()-t0)
 
     print(f"Initial conditions:\n{x0}\n")
     print(f"Final conditions:\n{xf}\n")
