@@ -16,7 +16,7 @@ limitations under the License.
 
 from __future__ import annotations
 
-from typing import (Tuple, Union, Optional, Type, overload)
+from typing import (Tuple, Union, Optional, Type, Callable, overload)
 
 import numpy as np
 from numpy.typing import NDArray
@@ -37,7 +37,7 @@ class integrator(metaclass=PrettyType):
     # *     Constructors & Destructors
     # *************************************************************************
 
-    def __init__(self, RKcoeff: Optional[RKCoeff]=RK78(), timeType: Optional[Type] = float, stateType: Optional[Type] = np.ndarray) -> None:
+    def __init__(self, RKcoeff: Optional[RKCoeff]=RK78(), stateType: Optional[Type] = np.ndarray) -> None:
         """
         Initialize a propagator object.
 
@@ -55,18 +55,16 @@ class integrator(metaclass=PrettyType):
         self._runningX: Union[daceypy.array, NDArray[np.double]] = None     #current state
         self._backX: Union[daceypy.array, NDArray[np.double]] = None        #backward state
         self._outX: Union[daceypy.array, NDArray[np.double]] = None         #final state
-        self._inputType: daceypy.array
         self._stateType: Type = stateType
-        self._timeType: Type = timeType
 
-        self._t0: Union[daceypy.DA, float] = None                            #initial time
-        self._tf: Union[daceypy.DA, float] = None                            #final time (if I build well the Integrator it could be also befor of t0)
+        self._t0: float = None                            #initial time
+        self._tf: float = None                            #final time (if I build well the Integrator it could be also befor of t0)
         self._DT: float = None                                               #support variable to store tf-t0 and avoid multiple type checks 
         self._propDir: int = 0                                               #propagation direction (forward =1, backward=-1)
 
-        self._backTime: Union[daceypy.DA, float] = None                     #backward time
-        self._runningTime: Union[daceypy.DA, float] = None                  #current time
-        self._tout: Union[daceypy.DA, float] = None                          #final time of propagation
+        self._backTime: float = None                     #backward time
+        self._runningTime: float = None                  #current time
+        self._tout: float = None                          #final time of propagation
 
         self._backH: float = None                                           #backward timestep 
         self._epstol: NDArray[np.double] = None                              #Step tolerance
@@ -80,24 +78,14 @@ class integrator(metaclass=PrettyType):
         self._RKcoeff: RKCoeff = RKcoeff                                     #support object to store Butcher's tableau of the propagation method
 
         # perform dynamic assignment to avoid continous type checks
-        if self._timeType is float:
-            setattr(integrator, '_adaptStepSize', _adaptStepSizeFloat)
-            setattr(integrator, 'loadTime', loadTimeFloat)
-            if stateType is np.ndarray:
-                setattr(integrator, '_geterr', _geterrFloat)
-                setattr(integrator, '_getepstol', _getepstolFloat)
-                self._inputType = np
-            elif stateType is daceypy.array:
-                setattr(integrator, '_geterr', _geterrDA)
-                setattr(integrator, '_getepstol', _getepstolDA)
-        elif self._timeType is daceypy.DA:
+        if stateType is np.ndarray:
+            setattr(integrator, '_geterr', _geterrFloat)
+            setattr(integrator, '_getepstol', _getepstolFloat)
+            self._inputType = np
+        elif stateType is daceypy.array:
             setattr(integrator, '_geterr', _geterrDA)
             setattr(integrator, '_getepstol', _getepstolDA)
-            setattr(integrator, '_adaptStepSize', _adaptStepSizeDA)
-            setattr(integrator, 'loadTime', loadTimeDA)
-        else:
-            raise TypeError("timeType must be either type float or daceypy.DA "
-                            f"(\"{timeType}\") was given")
+            self._inputType = daceypy.array
 
         return
 
@@ -129,14 +117,14 @@ class integrator(metaclass=PrettyType):
             self._checkStep = False
         return False
 
-    def _acceptStep(self, pn: Union[daceypy.array, NDArray[np.double]], tnew: Union[daceypy.DA, float]) -> None:
+    def _acceptStep(self, pn: Union[daceypy.array, NDArray[np.double]], tnew: float) -> None:
         """
         Updates the integration state if the tolerances are satisfied.
         Can be overloaded by the user to define a custom set of actions.
 
         Args:
             pn: propagated state (either numpy.ndarray or daceypy.array)
-            tnew: integration time reached (either float or daceypy.DA)
+            tnew: integration time reached  
 
 
         """
@@ -179,14 +167,14 @@ class integrator(metaclass=PrettyType):
             self._reachstime = False
         return self._reachstime
 
-    def _Initialize(self, Initset: Union[daceypy.array, NDArray[np.double]], t1: Union[daceypy.DA, float], t2: Union[daceypy.DA, float]) -> None:
+    def _Initialize(self, Initset: Union[daceypy.array, NDArray[np.double]], t1: float, t2: float) -> None:
         """
         Initializes the state and time of the propagator.
 
         Args:
             Initset: initial state (either numpy.ndarray or daceypy.array)
-            t1: initial time of the propagation (either float or daceypy.DA)
-            t2: final time of the propagation (either float or daceypy.DA)
+            t1: initial time of the propagation  
+            t2: final time of the propagation  
 
         Raises:
             TypeError
@@ -258,18 +246,30 @@ class integrator(metaclass=PrettyType):
         """
         ...
 
-    @overload
     def _adaptStepSize(self) -> None:
         """
         Adapt the stepsize according to step error.
         """
-        ...
+        
+        self._input.h *= min(4.0, max(0.1, 0.9*pow(1.0/self._err, 1.0/(self._RKcoeff.RK_order+1.0))))
+
+        if abs(self._input.h) <= self._input.minh*1.2:
+            self._input.h /= 3.0
+            print(" --- WARNING MINIMUM STEP SIZE REACHED.")
+
+        if abs(self._input.h) > self._input.maxh:
+            self._input.h = self._propDir*self._input.maxh
+
+        dt = abs(self._tf - self._input.t)
+        if dt < abs(self._input.h):
+            self._input.h = self._propDir*dt
+            
+        return None
     
     # *************************************************************************
     # *     Functions that should be accessed outside class
     # *************************************************************************
-    @overload
-    def loadTime(self, t1:  Union[daceypy.DA, float], t2:  Union[daceypy.DA, float]) -> None:
+    def loadTime(self, t1: float, t2:  float) -> None:
         """
         Loads initial and final propagation times inside an instance of integrator class.
 
@@ -277,7 +277,20 @@ class integrator(metaclass=PrettyType):
             t1: initial time (either daceypy.DA or float)
             t2: final time (either daceypy.DA or float)
         """
-        ...
+        if not isinstance(t1, float):
+            raise TypeError("t1 must be a float "
+                            f"(\"{type(t1)}\") was given")
+        if not isinstance(t2, float):
+            raise TypeError("t2 must be a float "
+                            f"(\"{type(t2)}\") was given")
+
+        self._t0 = t1
+        self._tf = t2
+
+        self._DT=self._tf - self._t0
+        self._propDir = 1 if self._DT>0 else -1
+
+        return
     
     def loadTol(self, tol1: float = 0.0, tol2: float = 0.0) -> None: 
         """
@@ -315,7 +328,7 @@ class integrator(metaclass=PrettyType):
         if (self._input.maxh == 0.0 ): self._input.maxh = 0.4*abs(self._DT) #//the user does not defined the limits for the step size
         if (self._input.minh == 0.0 ): self._input.minh = self._input.maxh*2.2e-16
     
-    def propagate(self, Initset: Union[daceypy.array, NDArray[np.double]], t1: Union[daceypy.DA, float], t2: Union[daceypy.DA, float]) -> Union[daceypy.array, NDArray[np.double]]:
+    def propagate(self, Initset: Union[daceypy.array, NDArray[np.double]], t1: float, t2: float) -> Union[daceypy.array, NDArray[np.double]]:
         """
         Propagates state in time interval according to selected numerical scheme.
 
@@ -393,49 +406,6 @@ def _getepstolFloat(self, pn: NDArray[np.double]) -> NDArray[np.double]:
 
     return tol
 
-def _adaptStepSizeFloat(self) -> None:
-    """
-    Adapt the stepsize according to step error.
-    """
-
-    self._input.h *= min(4.0, max(0.1, 0.9*pow(1.0/self._err, 1.0/(self._RKcoeff.RK_order+1.0))))
-
-    if abs(self._input.h) <= self._input.minh*1.2:
-        self._input.h /= 3.0
-        print(" --- WARNING MINIMUM STEP SIZE REACHED.")
-
-    if abs(self._input.h) > self._input.maxh:
-        self._input.h = self._propDir*self._input.maxh
-
-    dt = abs(self._tf - self._input.t)
-    if dt < abs(self._input.h):
-        self._input.h = self._propDir*dt
-        
-    return None
-
-def loadTimeFloat(self, t1: float, t2: float) -> None:
-    """
-    Loads initial and final propagation times inside an instance of integrator class.
-
-    Args:
-        t1: initial time
-        t2: final time
-    """
-    if not isinstance(t1, float):
-        raise TypeError("t1 must be a float "
-                        f"(\"{type(t1)}\") was given")
-    if not isinstance(t2, float):
-        raise TypeError("t2 must be a float "
-                        f"(\"{type(t2)}\") was given")
-
-    self._t0 = t1
-    self._tf = t2
-
-    self._DT=self._tf - self._t0
-    self._propDir = 1 if self._DT>0 else -1
-
-    return
-
 # *************************************************************************
 # *     Functions specialized for DA type
 # *************************************************************************
@@ -481,45 +451,27 @@ def _getepstolDA(self, pn: daceypy.array) -> NDArray[np.double]:
 
     return tol
 
-def _adaptStepSizeDA(self) -> None:
+def PicardLindelof(x: Union[daceypy.array, NDArray[np.double]], direction: int, tf: float,  
+                    f: Callable[[daceypy.array], Union[daceypy.DA, float]]) -> daceypy.array:
     """
-    Adapt the stepsize according to step error.
-    """
-
-    self._input.h *= min(4.0, max(0.1, 0.9*pow(1.0/self._err, 1.0/(self._RKcoeff.RK_order+1.0))))
-
-    if abs(self._input.h) <= self._input.minh*1.2:
-        self._input.h /= 3.0
-        print(" --- WARNING MINIMUM STEP SIZE REACHED.")
-
-    if abs(self._input.h) > self._input.maxh:
-        self._input.h = self._propDir*self._input.maxh
-
-    dt = abs((self._tf - self._input.t).cons())
-    if dt < abs(self._input.h):
-        self._input.h = self._propDir*dt
-        
-    return None
-
-def loadTimeDA(self, t1:  daceypy.DA, t2:  daceypy.DA) -> None:
-    """
-    Loads initial and final propagation times inside an instance of integrator class.
+    Computes the time expansion at final time with Picard Lindelof operator
 
     Args:
-        t1: initial time
-        t2: final time
+        x: expansion state.
+        direction: index of DA variable corresponding to time.
+        tf: constant float expressing the reference time of expansion.
+        f: right hand side of ODE.
+
+    Returns:
+        The input state expanded in time about input reference time.
     """
-    if not isinstance(t1, daceypy.DA):
-        raise TypeError("t1 must be a daceypy.DA "
-                        f"(\"{type(t1)}\") was given")
-    if not isinstance(t2, daceypy.DA):
-        raise TypeError("t2 must be a daceypy.DA "
-                        f"(\"{type(t2)}\") was given")
-    self._t0 = t1
-    self._tf = t2
+    expansionOrder = daceypy.DA.getMaxOrder()
+    t = tf + daceypy.DA(direction)
 
-    self._DT=(self._tf - self._t0).cons()
-    self._propDir = 1 if self._DT>0 else -1
+    x_i = x.copy()
 
-    return
-    
+    for i in range(expansionOrder):
+        # iteration n times
+        x_i = x + f(x_i, t).integ(direction)
+
+    return x_i
