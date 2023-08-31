@@ -35,3 +35,7 @@ IMPORTANT: The code is provided "as is", use at your own risk.
     5. Vectors [Py](Tutorials/Tutorial2/5Vectors-Ex.py)
     6. Integrator [Py](Tutorials/Tutorial2/6Integrator-Ex.py)
     7. PID [Py](Tutorials/Tutorial2/7PID-Ex.py)
+- Adaptive Domain Splitting (ADS)
+  - [Readme](ADS/README.md)
+  - Example 1 (Basics) [Py](ADS/1Basics-Ex.py)
+  - Example 2 (Advanced) [Py](ADS/2Advanced-Ex.py)
