@@ -49,7 +49,7 @@ class ADS(metaclass=PrettyType):
 
         Args:
             direction: index of the DA variable along which domain has to be split
-        
+
         Returns:
             Two new domains as instances of ADS class.
 
@@ -84,7 +84,7 @@ class ADS(metaclass=PrettyType):
 
         Args:
             N_max: maximum number of allowed splits.
-        
+
         Returns:
             True if the domain can be split, False otherwise.
 
@@ -96,7 +96,7 @@ class ADS(metaclass=PrettyType):
     def countSplits(self) -> NDArray[np.int_]:
         """
         Count the number of splits that the current domain has undergone for each dimension.
-        
+
         Returns:
             Number of splits for each dimension as NDArray.
 
@@ -121,7 +121,7 @@ class ADS(metaclass=PrettyType):
 
         Args:
             type_: type of the norm to be used.
-        
+
         Returns:
             The index of the variable along which the split occurs.
 
@@ -161,7 +161,7 @@ class ADS(metaclass=PrettyType):
 
         Raises:
             DACEException
-        
+
         See also:
             DA.estimNorm
         """
@@ -175,13 +175,13 @@ class ADS(metaclass=PrettyType):
         Args:
             type_: type of the norm to be used, see documentation for DA.estimNorm.
             toll : tolerance determining the split
-        
+
         Returns:
             A bool to indicate whether it is necessary to split or not.
 
         Raises:
             DACEException
-        
+
         See also:
             DA.estimNorm
         """
@@ -199,7 +199,7 @@ class ADS(metaclass=PrettyType):
             DACEException
             ValueError: if toll has size different from the input vector
             TypeError: if toll is not a float or array of floats
-        
+
         See also:
             DA.estimNorm
         """
@@ -216,7 +216,7 @@ class ADS(metaclass=PrettyType):
             toll_vec = toll
         else:
             raise TypeError('toll can only be a float or an array of floats')
-        
+
         max_location = np.argmax(errors)
 
         map_1d = self.manifold[max_location]
@@ -227,7 +227,7 @@ class ADS(metaclass=PrettyType):
         err = estim[estim.size - 1]
 
         return err > toll
-    
+
     @staticmethod
     def eval(
         initial_domains: List[ADS],
@@ -259,7 +259,7 @@ class ADS(metaclass=PrettyType):
             log_fun:
                 function invoked for progress and status logging,
                 to disable logging pass a no-op function (e.g., `lambda s: None`)
-        
+
         See also:
             DA.estimNorm
         """
@@ -296,7 +296,7 @@ class ADS(metaclass=PrettyType):
                 # no further splitting needed
                 final_domains.append(p_el)
                 log_fun("One domain reached end of transformation. Still to process:", len(domains), "domains.")
-            
+
             log_fun("Remaining domains to be transformed:", len(domains))
 
         log_fun("Final number of domains:", len(final_domains))

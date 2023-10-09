@@ -195,7 +195,7 @@ def TBP_time(x: array, tau: float, t0: DA, tf: DA) -> array:
     # RHS of ODE must be multiplied by (tf-t0) to scale
 
     # t is computed but useless in case of autonomous dynamics
-    t = tau*(tf-t0) 
+    t = tau * (tf - t0)
     pos: array = x[:3]
     vel: array = x[3:]
     r = pos.vnorm()
@@ -241,8 +241,8 @@ def main():
     # Method taken from Sect. 6 of https://doi.org/10.1007/s10569-010-9283-5.
     # The idea is to define a normalized time that varies from 0 (at t = t0)
     # to 1 (at t = tf).
-    # This normalization requires modification of the RHS of the ODE but 
-    # transforms initial and final time into parameters, hence removing the 
+    # This normalization requires modification of the RHS of the ODE but
+    # transforms initial and final time into parameters, hence removing the
     # need of a custom integrator capable of dealing with DA time.
 
     # a lambda function needs to be created to fix t0 and tf for the propagation.
@@ -254,7 +254,7 @@ def main():
     # creation of instance of propagator class with correct dynamics
     propagator_78=TBP_integrator_time(RK.RK78(), array)
 
-    # custom properties to store initial and final time as DA variables: 
+    # custom properties to store initial and final time as DA variables:
     # they will be used for scaling the dynamics as previously done with
     # the lambda function.
     propagator_78.T0 = 0.0
@@ -283,8 +283,6 @@ def main():
 
     print("Error of final time expansion (integrator vs Picard-Lindelof): \n",
            xf_modular - xf_PL)
-
-
 
 
 if __name__ == "__main__":

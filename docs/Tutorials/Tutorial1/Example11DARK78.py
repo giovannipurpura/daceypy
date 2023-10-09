@@ -227,7 +227,7 @@ def main():
     print(f"Displaced Initial condition:\n{x0.cons() + Deltax0}\n")
     print(f"Displaced Final condition:\n{xf.eval(Deltax0)}\n")
 
-    print("*** PROPAGATION WITH MODULAR RK78 PROPAGATOR DEFINED IN THIS EXAMPLE ***")
+    print("*** PROPAGATION WITH MODULAR RK78 PROPAGATOR ***")
     propagator_78 = TBP_integrator(RK.RK78(), array)
     propagator_78.loadTime(0.0, np.pi * np.sqrt(a**3 / mu))
     propagator_78.loadTol(20*1e-12, 1e-12)

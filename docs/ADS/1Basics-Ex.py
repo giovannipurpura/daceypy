@@ -29,7 +29,7 @@ def main() -> None:
     # initialize DACE for 10th-order computations in 2 variables
     DA.init(10, 2)
     Ns: int = 30
-    
+
     # define ADS parameters
     tol = 1e-3
     Nmax = 100

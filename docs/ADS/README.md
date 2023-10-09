@@ -1,4 +1,4 @@
-# Adaptive Domain Splitting (ADS) 
+# Adaptive Domain Splitting (ADS)
 
 ## References
 

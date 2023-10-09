@@ -46,7 +46,7 @@ class integrator(metaclass=PrettyType):
 
         Args:
             RKcoeff:
-                instance of the class RKCoeff that stores the coefficients 
+                instance of the class RKCoeff that stores the coefficients
                 of the Numerical Propagation Scheme
 
         See also:
@@ -54,7 +54,7 @@ class integrator(metaclass=PrettyType):
             DA.getMonomial
         """
 
-        # declaration of protected instance variables 
+        # declaration of protected instance variables
         self._runningX: Union[daceypy.array, NDArray[np.double]] = None
         "current state"
         self._backX: Union[daceypy.array, NDArray[np.double]] = None
@@ -168,7 +168,7 @@ class integrator(metaclass=PrettyType):
             t: time (either float or daceypy.DA)
 
         Returns:
-            The time derivatives of the state x at time t 
+            The time derivatives of the state x at time t
             (either as numpy.ndarray or daceypy.array)
         """
         raise NotImplementedError()
@@ -198,8 +198,8 @@ class integrator(metaclass=PrettyType):
 
         Args:
             Initset: initial state (either numpy.ndarray or daceypy.array)
-            t1: initial time of the propagation  
-            t2: final time of the propagation  
+            t1: initial time of the propagation
+            t2: final time of the propagation
 
         Raises:
             TypeError
@@ -250,7 +250,7 @@ class integrator(metaclass=PrettyType):
         Computes the propagation error for the given timestep.
 
         Args:
-            pndiff: 
+            pndiff:
                 Variation of state caused by different propagation orders.
 
         Returns:
@@ -311,7 +311,7 @@ class integrator(metaclass=PrettyType):
         self._DT = self._tf - self._t0
         self._propDir = 1 if self._DT > 0 else -1
 
-    def loadTol(self, tol1: float = 0.0, tol2: float = 0.0) -> None: 
+    def loadTol(self, tol1: float = 0.0, tol2: float = 0.0) -> None:
         """
         Loads absolute and relative tolerances of integrator.
 
@@ -346,7 +346,7 @@ class integrator(metaclass=PrettyType):
             self._input.maxh = 0.4 * abs(self._DT)
         if self._input.minh == 0.0:
             self._input.minh = self._input.maxh * 2.2e-16
-    
+
     def propagate(self, Initset: Union[daceypy.array, NDArray[np.double]], t1: Union[daceypy.DA, float], t2: Union[daceypy.DA, float]) -> Union[daceypy.array, NDArray[np.double]]:
         """
         Propagates state in time interval according to selected numerical scheme.

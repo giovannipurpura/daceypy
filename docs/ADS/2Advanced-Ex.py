@@ -284,9 +284,12 @@ def figure_3(XF: NDArray[np.double], XF6: NDArray[np.double], XF14: NDArray[np.d
 
     return ax
 
-def figure_4(final_lists: List[List[ADS]], XF: NDArray[np.double], XF14: NDArray[np.double],
-              Ns: int, perimeter_norm: NDArray[np.double], time_analysis: NDArray[np.int32]) -> plt.Axes:
-    
+
+def figure_4(
+    final_lists: List[List[ADS]], XF: NDArray[np.double], XF14: NDArray[np.double],
+    Ns: int, perimeter_norm: NDArray[np.double], time_analysis: NDArray[np.int32],
+) -> plt.Axes:
+
     final_map_list=[]
     final_domain_list=[]
     for i in range(len(time_analysis)): # first interesting one is 16?
@@ -337,9 +340,11 @@ def figure_5(Ts: int, tgrid: NDArray[np.double], final_lists: List[List[ADS]]) -
     return ax
 
 
-def figure_6(final_lists: List[List[ADS]], XF: NDArray[np.double], XF14: NDArray[np.double],
-              Ns: int, perimeter_norm: NDArray[np.double], time_analysis: NDArray[np.int32]) -> plt.Axes:
-    
+def figure_6(
+    final_lists: List[List[ADS]], XF: NDArray[np.double], XF14: NDArray[np.double],
+    Ns: int, perimeter_norm: NDArray[np.double], time_analysis: NDArray[np.int32],
+) -> plt.Axes:
+
     final_map_list=[]
     final_domain_list=[]
     for i in range(len(time_analysis)): # first interesting one is 16?
@@ -385,7 +390,7 @@ def main():
     xb=0.008
     yb=0.08
     XI[0] += 1.0
-    XI[3] += np.sqrt(1.5) 
+    XI[3] += np.sqrt(1.5)
 
     TF = 50.
     T0 = 0.
@@ -420,7 +425,7 @@ def main():
     perimeter_norm[:, 1] = perimeter[:,1]/yb
 
     # propagation of ground truth perimeters (first run is going to take a while)
-    try: 
+    try:
         # load the propagated domain if integration already exists
         with (thisfolder / 'ground_truth_propagations.npy').open('rb') as f:
             XF = np.load(f, allow_pickle = True)
@@ -442,12 +447,12 @@ def main():
                 XFtemp[:,i+1]=xf.cons()
                 print(tf)
             XF[:,:,j]=XFtemp
-            
+
         with (thisfolder / 'ground_truth_propagations.npy').open('wb') as f:
             np.save(f, XF, allow_pickle = True)
-    
+
     # compute only highest order propagation and lower orders evaluated by truncating poly map
-    try: 
+    try:
         # load the propagated domain if integration already exists
         with (thisfolder / 'order_1.npy').open('rb') as f:
             XF1 = np.load(f, allow_pickle = True)
@@ -480,7 +485,7 @@ def main():
 
             x0 = xf
             print(tf)
-        
+
         DA.pushTO(1)
         XF1 = np.zeros((4,Ts,perimeter_norm.shape[0]))
         x_sub = array.identity(2)
@@ -594,9 +599,9 @@ def main():
     ###################### Replication of ADS figures ######################
     figure_5(Ts, tgrid, final_lists)
     figure_6(final_lists, XF, XF14, Ns, perimeter_norm, time_analysis)
-    
+
     plt.show()
-    
+
     print('End')
 
 

@@ -1051,7 +1051,7 @@ class array(NDArray[np.object_], metaclass=PrettyType):
             return f"[[[ {'x'.join(map(str, self.shape))} DACEyPy array ]]]"
 
         return "".join(out)
-    
+
     # *****************************************************************************
     # *     Auxiliary functions for ADS
     # *****************************************************************************
