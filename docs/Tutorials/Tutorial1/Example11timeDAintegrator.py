@@ -3,8 +3,9 @@ import daceypy_import_helper  # noqa: F401
 from typing import Callable, Type
 
 import numpy as np
-from numpy.typing import NDArray
-from daceypy import DA, array, RK, integrator
+
+from daceypy import DA, RK, array, integrator
+from daceypy._integrator import PicardLindelof
 
 mu = 398600.0  # km^3/s^2
 
@@ -181,7 +182,6 @@ def RK78(Y0: array, X0: float, X1: float, f: Callable[[array, float], array]):
 
     return Y1
 
-
 def TBP(x: array, t: float) -> array:
     pos: array = x[:3]
     vel: array = x[3:]
@@ -190,61 +190,101 @@ def TBP(x: array, t: float) -> array:
     dx = vel.concat(acc)
     return dx
 
-class TBP_integrator(integrator):
-    def __init__(self, RK: RK.RKCoeff = RK.RK78(),  stateType: Type = array):
-        super(TBP_integrator, self).__init__(RK, stateType)
+def TBP_time(x: array, tau: float, t0: DA, tf: DA) -> array:
+    # input time tau is normalized. To retrieve t: tau*(tf-t0)
+    # RHS of ODE must be multiplied by (tf-t0) to scale
+
+    # t is computed but useless in case of autonomous dynamics
+    t = tau*(tf-t0) 
+    pos: array = x[:3]
+    vel: array = x[3:]
+    r = pos.vnorm()
+    acc: array = -mu * pos / (r ** 3)
+    dx = (tf-t0)*(vel.concat(acc))
+    return dx
+
+class TBP_integrator_time(integrator):
+    def __init__(self, RK: RK.RKCoeff = RK.RK78(), stateType: Type = np.ndarray):
+        super(TBP_integrator_time, self).__init__(RK, stateType)
+
+        # auxiliary parameters to store time variation, may be included in state
+        # this would complicate the RHS of the ODE but would simplify this class
+        self.T0 = None
+        self.TF = None
+
+    def f(self, x, t):
+        return TBP_time(x,t, self.T0, self.TF)
+
+class TBP_integrator_float(integrator):
+    def __init__(self, RK: RK.RKCoeff = RK.RK78(), stateType: Type = np.ndarray):
+        super(TBP_integrator_float, self).__init__(RK, stateType)
 
     def f(self, x, t):
         return TBP(x,t)
 
-
-
 def main():
 
-    DA.init(3, 6)
+    DA.init(8, 7)
+    DA.setEps(1e-32)
 
     # Set initial conditions
     ecc = 0.5
 
-    x0 = array.identity(6)
+    x0 = array.zeros(6)
     x0[0] += 6678.0  # 300 km altitude
     x0[4] += np.sqrt(mu / 6678.0 * (1 + ecc))
 
     # integrate for half the orbital period
     a = 6678 / (1 - ecc)
-    with DA.cache_manager():  # optional, for efficiency
-        xf = RK78(x0, 0.0, np.pi * np.sqrt(a**3 / mu), TBP)
 
-    print("*** PROPAGATION WITH RK78 FUNCTION DEFINED IN THIS EXAMPLE ***")
-    print(f"Initial conditions:\n{x0}\n")
-    print(f"Final conditions:\n{xf}\n")
-    print(f"Initial conditions (cons. part):\n{x0.cons()}\n")
-    print(f"Final conditions: (cons. part)\n{xf.cons()}\n")
+    # application of time expansion with user defined integrator:
+    # Method taken from Sect. 6 of https://doi.org/10.1007/s10569-010-9283-5.
+    # The idea is to define a normalized time that varies from 0 (at t = t0)
+    # to 1 (at t = tf).
+    # This normalization requires modification of the RHS of the ODE but 
+    # transforms initial and final time into parameters, hence removing the 
+    # need of a custom integrator capable of dealing with DA time.
 
-    # Evaluate for a displaced initial condition
-    Deltax0 = np.array([1.0, -1.0, 0.0, 0.0, 0.0, 0.0])  # km
+    # a lambda function needs to be created to fix t0 and tf for the propagation.
+    RHS = lambda x, tau : TBP_time(x, tau, 0.0, np.pi * np.sqrt(a**3 / mu) + DA(7))
+    # integration is carried out in normalized time between 0 and 1:
+    xf = RK78(x0, 0.0, 1.0, RHS)
 
-    print(f"Displaced Initial condition:\n{x0.cons() + Deltax0}\n")
-    print(f"Displaced Final condition:\n{xf.eval(Deltax0)}\n")
+    # Alternatively, one can use the modular propagator provided in daceypy:
+    # creation of instance of propagator class with correct dynamics
+    propagator_78=TBP_integrator_time(RK.RK78(), array)
 
-    print("*** PROPAGATION WITH MODULAR RK78 PROPAGATOR DEFINED IN THIS EXAMPLE ***")
-    propagator_78 = TBP_integrator(RK.RK78(), array)
-    propagator_78.loadTime(0.0, np.pi * np.sqrt(a**3 / mu))
+    # custom properties to store initial and final time as DA variables: 
+    # they will be used for scaling the dynamics as previously done with
+    # the lambda function.
+    propagator_78.T0 = 0.0
+    propagator_78.TF = np.pi * np.sqrt(a**3 / mu) + DA(7)
+
+    # once again the integration is carried out in normalized time between 0 and 1:
+    propagator_78.loadTime(0.0, 1.0)
     propagator_78.loadTol(20*1e-12, 1e-12)
     propagator_78.loadStepSize()
+    xf_modular=propagator_78.propagate(x0, 0.0, 1.0)
 
-    xf2=propagator_78.propagate(x0,0.0, np.pi * np.sqrt(a**3 / mu))
+    # comparison with integrator of only constant part and non scaled time:
+    propagator_78f=TBP_integrator_float(RK.RK78(), array)
+    propagator_78f.loadTime(0.0,  np.pi * np.sqrt(a**3 / mu))
+    propagator_78f.loadTol(20*1e-12, 1e-12)
+    propagator_78f.loadStepSize()
+    xf_modular_float=propagator_78f.propagate(x0, 0.0, np.pi * np.sqrt(a**3 / mu))
 
-    print(f"Initial conditions:\n{x0}\n")
-    print(f"Final conditions:\n{xf2}\n")
-    print(f"Initial conditions (cons. part):\n{x0.cons()}\n")
-    print(f"Final conditions: (cons. part)\n{xf2.cons()}\n")
+    print("Final error of constant part with and without time scaling: \n",
+           xf_modular.cons()-xf_modular_float)
 
-    # Evaluate for a displaced initial condition
-    Deltax0 = np.array([1.0, -1.0, 0.0, 0.0, 0.0, 0.0])  # km
+    # Comparison with expansion at final time computed with picard lindelof operator:
+    # NB: only possible at final time
 
-    print(f"Displaced Initial condition:\n{x0.cons() + Deltax0}\n")
-    print(f"Displaced Final condition:\n{xf2.eval(Deltax0)}\n")
+    xf_PL=PicardLindelof(array(xf_modular_float), 7, np.pi * np.sqrt(a**3 / mu), TBP)
+
+    print("Error of final time expansion (integrator vs Picard-Lindelof): \n",
+           xf_modular - xf_PL)
+
+
 
 
 if __name__ == "__main__":
