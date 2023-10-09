@@ -16,23 +16,33 @@ limitations under the License.
 
 from __future__ import annotations
 
-from typing import (Union)
+from typing import Union
 
 import numpy as np
 from numpy.typing import NDArray
 
 import daceypy
+
 from ._PrettyType import PrettyType
 
+
 class RKstate(metaclass=PrettyType):
-    epsabs: float = 0.0                   #Absolute tolerance
-    epsrel: float = 0.0                   #Relative tolerance
-    h: float = 0.0                        #current step size
-    h0: float = 0.0                      #initial step size
-    maxh: float = 0.0                    #max Step size
-    minh: float  = 0.0                   #min Step size
-    globalerr: float = 0.0             #integration global error
-    t: Union[float, daceypy.DA] = None    #current time
+    epsabs: float = 0.0
+    "Absolute tolerance"
+    epsrel: float = 0.0
+    "Relative tolerance"
+    h: float = 0.0
+    "current step size"
+    h0: float = 0.0
+    "initial step size"
+    maxh: float = 0.0
+    "max Step size"
+    minh: float  = 0.0
+    "min Step size"
+    globalerr: float = 0.0
+    "integration global error"
+    t: Union[float, daceypy.DA] = None
+    "current time"
 
 class RKCoeff(metaclass=PrettyType):
     _RK_stage: int
@@ -60,7 +70,7 @@ class RKCoeff(metaclass=PrettyType):
     @property
     def beta_star(self):
         return self._beta_star
-        
+
 class RK78_DP(RKCoeff, metaclass=PrettyType):
     def __init__(self):
         self._RK_stage: int = 13
@@ -80,7 +90,7 @@ class RK78_DP(RKCoeff, metaclass=PrettyType):
         403863854.0/491063109.0,      0.0,        0.0,     -5068492393.0/434740067.0,     -411421997.0/543043805.0,     652783627.0/914296604.0,    11173962825.0/925320556.0,    -13158990841.0/6184727034.0,  3936647629.0/1978049680.0,   -160528059.0/685178525.0,  248638103.0/1413531060.0, 0.0]) #12
         self._gamma: NDArray[np.double] = np.asarray([
             0.0,  1.0/18.0,    1.0/12.0,      1.0/8.0,      5.0/16.0,         3.0/8.0,       59.0/400.0,   93.0/200.0,     5490023248.0/9719169821.0,    13.0/20.0,   1201146811.0/1299019798.0,        1.0,   1.0])
-        self._beta: NDArray[np.double] = np.asarray([ 
+        self._beta: NDArray[np.double] = np.asarray([
             14005451.0/335480064.0, 0.0, 0.0, 0.0, 0.0,  -59238493.0/1068277825.0,   181606767.0/758867731.0,  561292985.0/797845732.0,  -1041891430.0/1371343529.0,  760417239.0/1151165299.0,  118820643.0/751138087.0, -528747749.0/2220607170.0, 1.0/4.0])
         self._beta_star: NDArray[np.double] = np.asarray([
             13451932.0/455176623.0, 0.0, 0.0, 0.0, 0.0,  -808719846.0/976000145.0, 1757004468.0/5645159321.0,  656045339.0/265891186.0,  -3867574721.0/1518517206.0,   465885868.0/322736535.0,   53011238.0/667516719.0,                  2.0/45.0,     0.0])
