@@ -34,6 +34,9 @@ __all__ = (
     "zeros",
     "identity",
     "op",
+    "ADS",
+    "RK",
+    "integrator",
 )
 
 from ._version import __version__
@@ -43,6 +46,9 @@ from ._compiledDA import compiledDA
 from ._array import array
 from ._Monomial import Monomial
 from . import op
+from ._ADS import ADS
+from . import RK
+from ._integrator import integrator
 
 init = DA.init
 isInitialized = DA.isInitialized

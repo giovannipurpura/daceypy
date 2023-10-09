@@ -1051,6 +1051,29 @@ class array(NDArray[np.object_], metaclass=PrettyType):
             return f"[[[ {'x'.join(map(str, self.shape))} DACEyPy array ]]]"
 
         return "".join(out)
+    
+    # *****************************************************************************
+    # *     Auxiliary functions for ADS
+    # *****************************************************************************
+
+    def getTruncationErrors(self, type_: int = 0) -> NDArray[np.double]:
+        """
+        Return a NumPy array with truncation errors computed
+        according to the given norm for each of the elements of the DA vector.
+
+        Args:
+            type_: type of the norm to be used, see documentation for DA.estimNorm.
+
+        Raises:
+            DACEException
+        """
+        errors = np.empty(self.shape[0])
+        ord = daceypy.DA.getTO()
+        el: daceypy.DA
+        for i, el in enumerate(self):
+            err, _ = el.estimNorm(0, type_, ord + 1)
+            errors[i] = err[-1]
+        return errors
 
     # *************************************************************************
     # *     Static factory routines
