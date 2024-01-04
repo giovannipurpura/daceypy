@@ -16,7 +16,8 @@ limitations under the License.
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional, Tuple, Union, overload
+from typing import (List, Tuple, Union, Callable, Optional,
+                    overload)
 
 import numpy as np
 from numpy.typing import NDArray
@@ -228,6 +229,61 @@ class ADS(metaclass=PrettyType):
 
         return err > toll
 
+    def center(self) -> NDArray[np.double]:
+        """
+        Compute the center of the current domain.
+
+        Returns:
+            The resulting domain center 
+        """
+        var = DA.getMaxVariables()
+        size = len(self.nsplit)
+        # auxiliary variable for the initial center and width
+        c = np.zeros(var)
+        w = 2.0 * np.ones(var)
+        for i in range(size):
+            n = abs(self.nsplit[i]) - 1
+            w[n] = 0.5*w[n] #  before it was been evaluete the half of displacement
+            c[n] += 0.5*np.sign(self.nsplit[i])*abs(w[n]) # then the previous computation is added to the constant part
+
+        return c
+
+    def width(self) -> NDArray[np.double]:
+        """
+        Compute the width of the current domain.
+
+        Returns:
+            The resulting domain width 
+        """
+        var = DA.getMaxVariables()
+        size = len(self.nsplit)
+        w = 2.0* np.ones(var)
+        for i in range(size):
+            n = abs(self.nsplit[i]) - 1
+            w[n] = 0.5*abs(w[n])
+        
+        return w
+
+    def contain(self, pt: NDArray[np.double]) -> bool:
+        """
+        Check if a point is inside the current domain.
+
+        Returns:
+            True if the point is inside the current domain.
+        """
+
+        var = DA.getMaxVariables()
+        if var!=pt.size:
+            raise ValueError(
+                "The dimension of selected point is wrong")
+        else:
+            c = self.center()
+            w = self.width()
+            if any(abs(pt-c)>0.5*w):
+                return False
+            else:
+                return True                                                                        
+
     @staticmethod
     def eval(
         initial_domains: List[ADS],
@@ -302,3 +358,31 @@ class ADS(metaclass=PrettyType):
         log_fun("Final number of domains:", len(final_domains))
 
         return final_domains
+
+    @staticmethod
+    def replay(nsplit: List[int], obj: array) -> array:
+        """
+        Replicate a sequence of splits on a given daceypy.array.
+
+        Returns:
+            The resulting manifold after composing the splits. 
+        """
+        x = array.identity
+        size = len(nsplit)
+        for i in range(size):
+            n = abs(nsplit[i]) - 1
+            x[n] = 0.5*np.sign(nsplit[i]) + 0.5*DA(n+1)
+            obj = obj.eval(x)
+            x[n] = DA(n+1)
+        return obj
+
+ 
+
+
+
+
+
+
+
+
+

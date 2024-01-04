@@ -157,7 +157,7 @@ class integrator(metaclass=PrettyType):
     @staticmethod
     def f(
         x: Union[daceypy.array, NDArray[np.double]],
-        t: Union[daceypy.DA, float],
+        t: float,
     ) -> Union[daceypy.array, NDArray[np.double]]:
         """
         Computes the righ-hand-side of the ODE.
@@ -165,7 +165,7 @@ class integrator(metaclass=PrettyType):
 
         Args:
             x: state (either numpy.ndarray or daceypy.array)
-            t: time (either float or daceypy.DA)
+            t: time (float)
 
         Returns:
             The time derivatives of the state x at time t
@@ -276,7 +276,11 @@ class integrator(metaclass=PrettyType):
         Adapt the stepsize according to step error.
         """
 
-        self._input.h *= min(4.0, max(0.1, 0.9 * pow(1.0 / self._err, 1.0 / (self._RKcoeff.RK_order + 1.0))))
+        if self._err == 0.0:
+            self._input.h=4.0
+        else:
+            self._input.h *= min(4.0, max(0.1, 0.9 * pow(1.0 / self._err, 1.0 / (self._RKcoeff.RK_order + 1.0))))
+        
 
         if abs(self._input.h) <= self._input.minh * 1.2:
             self._input.h /= 3.0
@@ -301,9 +305,15 @@ class integrator(metaclass=PrettyType):
             t2: final time (either daceypy.DA or float)
         """
         if not isinstance(t1, float):
-            raise TypeError(f"t1 must be a float (\"{type(t1)}\") was given")
+            if isinstance(t1, int):
+                t1=float(t1)
+            else:
+                raise TypeError(f"t1 must be a float (\"{type(t1)}\") was given")
         if not isinstance(t2, float):
-            raise TypeError(f"t2 must be a float (\"{type(t2)}\") was given")
+            if isinstance(t2,int):
+                t2=float(t2)
+            else:
+                raise TypeError(f"t2 must be a float (\"{type(t2)}\") was given")
 
         self._t0 = t1
         self._tf = t2
@@ -347,7 +357,7 @@ class integrator(metaclass=PrettyType):
         if self._input.minh == 0.0:
             self._input.minh = self._input.maxh * 2.2e-16
 
-    def propagate(self, Initset: Union[daceypy.array, NDArray[np.double]], t1: Union[daceypy.DA, float], t2: Union[daceypy.DA, float]) -> Union[daceypy.array, NDArray[np.double]]:
+    def propagate(self, Initset: Union[daceypy.array, NDArray[np.double]], t1: float, t2: float) -> Union[daceypy.array, NDArray[np.double]]:
         """
         Propagates state in time interval according to selected numerical scheme.
 
@@ -474,9 +484,10 @@ def _getepstolDA(self, pn: daceypy.array) -> NDArray[np.double]:
 
 def PicardLindelof(
     x: Union[daceypy.array, NDArray[np.double]],
-    direction: int, tf: float,
+    direction: int, 
+    tf: float,
     f: Callable[[daceypy.array], Union[daceypy.DA, float]],
-) -> daceypy.array:
+    ) -> daceypy.array:
     """
     Computes the time expansion at final time with Picard Lindelof operator
 

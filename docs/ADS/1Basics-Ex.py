@@ -118,7 +118,7 @@ def main() -> None:
 
     plt.show()
 
-    print('end')
+    print('End')
 
 
 if __name__ == "__main__":

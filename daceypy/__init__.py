@@ -37,6 +37,7 @@ __all__ = (
     "ADS",
     "RK",
     "integrator",
+    "ADSintegrator",
 )
 
 from ._version import __version__
@@ -49,6 +50,7 @@ from . import op
 from ._ADS import ADS
 from . import RK
 from ._integrator import integrator
+from ._ADSintegrator import ADSintegrator
 
 init = DA.init
 isInitialized = DA.isInitialized
