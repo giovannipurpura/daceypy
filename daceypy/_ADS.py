@@ -333,9 +333,9 @@ class ADS(metaclass=PrettyType):
             log_fun("Done." )
 
             # check if the domain can still be split
-            if p_el.checkSplit(toll, type_):
+            if p_el.canSplit(N_max):
                 # checks if domain needs to be split
-                if p_el.canSplit(N_max):
+                if p_el.checkSplit(toll, type_):
                     # compute splitting direction
                     dir = p_el.direction(type_)
                     # split the domain along the direction
@@ -344,14 +344,14 @@ class ADS(metaclass=PrettyType):
                     domains.extend(new_domains)
                     log_fun("A split occurred, total number of domains that need propagation are now:", len(domains))
                 else:
-                    # maximum number of splits for this domain has been reached,
-                    # just mark it as final and signal possible inaccuracies
-                    log_fun("A domain needed to split, but the maximum number of splits has been reached: possible inaccuracies may arise!")
+                    # no further splitting needed
                     final_domains.append(p_el)
+                    log_fun("One domain reached end of transformation. Still to process:", len(domains), "domains.")
             else:
-                # no further splitting needed
+                # maximum number of splits for this domain has been reached,
+                # just mark it as final and signal possible inaccuracies
+                log_fun("A domain needed to split, but the maximum number of splits has been reached: possible inaccuracies may arise!")
                 final_domains.append(p_el)
-                log_fun("One domain reached end of transformation. Still to process:", len(domains), "domains.")
 
             log_fun("Remaining domains to be transformed:", len(domains))
 

@@ -204,25 +204,25 @@ class ADSintegrator(integrator, metaclass=PrettyType):
                          self._stack.ADSPatch.nsplit, 
                          self._runningX)
                 
-                if temp_f.checkSplit(self._errtol):
-                    # if the domain can be split
-                    if temp_f.canSplit(self._nSplitMax): 
-                        # If step is accepted and needs to be checked 
-                        # but a violation is detected simply roll back 
-                        # to previous time step
-                        # If step is not accepted will not be checked
-                        # and hence execution will never arrive here
+                # if the domain can be split
+                if temp_f.canSplit(self._nSplitMax): 
+                    # If step is accepted and needs to be checked 
+                    # but a violation is detected simply roll back 
+                    # to previous time step
+                    # If step is not accepted will not be checked
+                    # and hence execution will never arrive here
+                    if temp_f.checkSplit(self._errtol):
                         self._runningX = self._backX
                         self._input.t = self._backTime
                         self._input.h = self._backH
                     else:
-                        # the domain cannot be further split. 
-                        # Set time of violation and violation flag 
-                        # so that check can be avoided until tf 
-                        self._stack.checkBreached = True
-                        self._stack._breachTime = self._input.t
                         self._checkStep = False
                 else:
+                    # the domain cannot be further split. 
+                    # Set time of violation and violation flag 
+                    # so that check can be avoided until tf 
+                    self._stack.checkBreached = True
+                    self._stack._breachTime = self._input.t
                     self._checkStep = False
 
         return self._checkStep
