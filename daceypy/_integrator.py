@@ -486,8 +486,8 @@ def PicardLindelof(
     x: Union[daceypy.array, NDArray[np.double]],
     direction: int, 
     tf: float,
-    f: Callable[[daceypy.array], Union[daceypy.DA, float]],
-    ) -> daceypy.array:
+    f: Callable[[daceypy.array, Union[daceypy.DA, float]], daceypy.array],
+) -> daceypy.array:
     """
     Computes the time expansion at final time with Picard Lindelof operator
 

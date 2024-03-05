@@ -182,6 +182,7 @@ def RK78(Y0: array, X0: float, X1: float, f: Callable[[array, float], array]):
 
     return Y1
 
+
 def TBP(x: array, t: float) -> array:
     pos: array = x[:3]
     vel: array = x[3:]
@@ -189,6 +190,7 @@ def TBP(x: array, t: float) -> array:
     acc: array = -mu * pos / (r ** 3)
     dx = vel.concat(acc)
     return dx
+
 
 def TBP_time(x: array, tau: float, t0: DA, tf: DA) -> array:
     # input time tau is normalized. To retrieve t: tau*(tf-t0)
@@ -203,6 +205,7 @@ def TBP_time(x: array, tau: float, t0: DA, tf: DA) -> array:
     dx = (tf-t0)*(vel.concat(acc))
     return dx
 
+
 class TBP_integrator_time(integrator):
     def __init__(self, RK: RK.RKCoeff = RK.RK78(), stateType: Type = np.ndarray):
         super(TBP_integrator_time, self).__init__(RK, stateType)
@@ -215,12 +218,14 @@ class TBP_integrator_time(integrator):
     def f(self, x, t):
         return TBP_time(x,t, self.T0, self.TF)
 
+
 class TBP_integrator_float(integrator):
     def __init__(self, RK: RK.RKCoeff = RK.RK78(), stateType: Type = np.ndarray):
         super(TBP_integrator_float, self).__init__(RK, stateType)
 
     def f(self, x, t):
         return TBP(x,t)
+
 
 def main():
 
@@ -252,7 +257,7 @@ def main():
 
     # Alternatively, one can use the modular propagator provided in daceypy:
     # creation of instance of propagator class with correct dynamics
-    propagator_78=TBP_integrator_time(RK.RK78(), array)
+    propagator_78 = TBP_integrator_time(RK.RK78(), array)
 
     # custom properties to store initial and final time as DA variables:
     # they will be used for scaling the dynamics as previously done with
@@ -271,7 +276,7 @@ def main():
     propagator_78f.loadTime(0.0,  np.pi * np.sqrt(a**3 / mu))
     propagator_78f.loadTol(20*1e-12, 1e-12)
     propagator_78f.loadStepSize()
-    xf_modular_float=propagator_78f.propagate(x0, 0.0, np.pi * np.sqrt(a**3 / mu))
+    xf_modular_float = propagator_78f.propagate(x0, 0.0, np.pi * np.sqrt(a**3 / mu))
 
     print("Final error of constant part with and without time scaling: \n",
            xf_modular.cons()-xf_modular_float)
@@ -279,7 +284,7 @@ def main():
     # Comparison with expansion at final time computed with picard lindelof operator:
     # NB: only possible at final time
 
-    xf_PL=PicardLindelof(array(xf_modular_float), 7, np.pi * np.sqrt(a**3 / mu), TBP)
+    xf_PL = PicardLindelof(array(xf_modular_float), 7, np.pi * np.sqrt(a**3 / mu), TBP)
 
     print("Error of final time expansion (integrator vs Picard-Lindelof): \n",
            xf_modular - xf_PL)

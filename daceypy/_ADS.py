@@ -237,14 +237,13 @@ class ADS(metaclass=PrettyType):
             The resulting domain center 
         """
         var = DA.getMaxVariables()
-        size = len(self.nsplit)
         # auxiliary variable for the initial center and width
         c = np.zeros(var)
         w = 2.0 * np.ones(var)
-        for i in range(size):
-            n = abs(self.nsplit[i]) - 1
-            w[n] = 0.5*w[n] #  before it was been evaluete the half of displacement
-            c[n] += 0.5*np.sign(self.nsplit[i])*abs(w[n]) # then the previous computation is added to the constant part
+        for split in self.nsplit:
+            n = abs(split) - 1
+            w[n] = 0.5 * w[n]  # eval half displacement
+            c[n] += 0.5 * np.sign(split) * abs(w[n]) # add it to the constant part
 
         return c
 
@@ -273,16 +272,16 @@ class ADS(metaclass=PrettyType):
         """
 
         var = DA.getMaxVariables()
-        if var!=pt.size:
+        if var != pt.size:
             raise ValueError(
-                "The dimension of selected point is wrong")
+                "The dimension of the selected point is wrong")
         else:
             c = self.center()
             w = self.width()
             if any(abs(pt-c)>0.5*w):
                 return False
             else:
-                return True                                                                        
+                return True
 
     @staticmethod
     def eval(
@@ -365,24 +364,12 @@ class ADS(metaclass=PrettyType):
         Replicate a sequence of splits on a given daceypy.array.
 
         Returns:
-            The resulting manifold after composing the splits. 
+            The resulting manifold after composing the splits.
         """
-        x = array.identity
-        size = len(nsplit)
-        for i in range(size):
-            n = abs(nsplit[i]) - 1
-            x[n] = 0.5*np.sign(nsplit[i]) + 0.5*DA(n+1)
+        x = array.identity()
+        for split in nsplit:
+            n = abs(split) - 1
+            x[n] = 0.5 * np.sign(split) + 0.5 * DA(n + 1)
             obj = obj.eval(x)
-            x[n] = DA(n+1)
+            x[n] = DA(n + 1)
         return obj
-
- 
-
-
-
-
-
-
-
-
-
