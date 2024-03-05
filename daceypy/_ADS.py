@@ -16,7 +16,8 @@ limitations under the License.
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional, Tuple, Union, overload
+from typing import (List, Tuple, Union, Callable, Optional,
+                    overload)
 
 import numpy as np
 from numpy.typing import NDArray
@@ -228,6 +229,60 @@ class ADS(metaclass=PrettyType):
 
         return err > toll
 
+    def center(self) -> NDArray[np.double]:
+        """
+        Compute the center of the current domain.
+
+        Returns:
+            The resulting domain center 
+        """
+        var = DA.getMaxVariables()
+        # auxiliary variable for the initial center and width
+        c = np.zeros(var)
+        w = 2.0 * np.ones(var)
+        for split in self.nsplit:
+            n = abs(split) - 1
+            w[n] = 0.5 * w[n]  # eval half displacement
+            c[n] += 0.5 * np.sign(split) * abs(w[n]) # add it to the constant part
+
+        return c
+
+    def width(self) -> NDArray[np.double]:
+        """
+        Compute the width of the current domain.
+
+        Returns:
+            The resulting domain width 
+        """
+        var = DA.getMaxVariables()
+        size = len(self.nsplit)
+        w = 2.0* np.ones(var)
+        for i in range(size):
+            n = abs(self.nsplit[i]) - 1
+            w[n] = 0.5*abs(w[n])
+        
+        return w
+
+    def contain(self, pt: NDArray[np.double]) -> bool:
+        """
+        Check if a point is inside the current domain.
+
+        Returns:
+            True if the point is inside the current domain.
+        """
+
+        var = DA.getMaxVariables()
+        if var != pt.size:
+            raise ValueError(
+                "The dimension of the selected point is wrong")
+        else:
+            c = self.center()
+            w = self.width()
+            if any(abs(pt-c)>0.5*w):
+                return False
+            else:
+                return True
+
     @staticmethod
     def eval(
         initial_domains: List[ADS],
@@ -277,9 +332,9 @@ class ADS(metaclass=PrettyType):
             log_fun("Done." )
 
             # check if the domain can still be split
-            if p_el.checkSplit(toll, type_):
+            if p_el.canSplit(N_max):
                 # checks if domain needs to be split
-                if p_el.canSplit(N_max):
+                if p_el.checkSplit(toll, type_):
                     # compute splitting direction
                     dir = p_el.direction(type_)
                     # split the domain along the direction
@@ -288,17 +343,33 @@ class ADS(metaclass=PrettyType):
                     domains.extend(new_domains)
                     log_fun("A split occurred, total number of domains that need propagation are now:", len(domains))
                 else:
-                    # maximum number of splits for this domain has been reached,
-                    # just mark it as final and signal possible inaccuracies
-                    log_fun("A domain needed to split, but the maximum number of splits has been reached: possible inaccuracies may arise!")
+                    # no further splitting needed
                     final_domains.append(p_el)
+                    log_fun("One domain reached end of transformation. Still to process:", len(domains), "domains.")
             else:
-                # no further splitting needed
+                # maximum number of splits for this domain has been reached,
+                # just mark it as final and signal possible inaccuracies
+                log_fun("A domain needed to split, but the maximum number of splits has been reached: possible inaccuracies may arise!")
                 final_domains.append(p_el)
-                log_fun("One domain reached end of transformation. Still to process:", len(domains), "domains.")
 
             log_fun("Remaining domains to be transformed:", len(domains))
 
         log_fun("Final number of domains:", len(final_domains))
 
         return final_domains
+
+    @staticmethod
+    def replay(nsplit: List[int], obj: array) -> array:
+        """
+        Replicate a sequence of splits on a given daceypy.array.
+
+        Returns:
+            The resulting manifold after composing the splits.
+        """
+        x = array.identity()
+        for split in nsplit:
+            n = abs(split) - 1
+            x[n] = 0.5 * np.sign(split) + 0.5 * DA(n + 1)
+            obj = obj.eval(x)
+            x[n] = DA(n + 1)
+        return obj

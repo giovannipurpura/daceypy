@@ -1,6 +1,5 @@
 import daceypy_import_helper  # noqa: F401
 
-import time
 from inspect import getsourcefile
 from pathlib import Path
 from typing import Callable, List
@@ -9,7 +8,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
 
-from daceypy import ADS, DA, array
+from daceypy import ADS, DA, array, RK, ADSintegrator
+from daceypy._ADSintegrator import ADSstate
 
 # setup better images (tex fonts)
 plt.rcParams.update({
@@ -211,172 +211,134 @@ def TBP(x: array, t: float) -> array:
     return dx
 
 
-# evaluation functions for ADS
-def base_propagation(domain_0: ADS, t0: float, tf: float) -> ADS:
+class AutomaticADS_TBP_integrator(ADSintegrator):
     """
-    Base ADS propagation function.
+    Custom child class of ADSintegrator to select dynamics.
     """
-    x0 = domain_0.box
-    xf = RK78(x0, t0, tf, TBP)
-    return ADS(domain_0.box, domain_0.nsplit, xf)
+    def __init__(self, RK: RK.RKCoeff = RK.RK78()):
+        super(AutomaticADS_TBP_integrator, self).__init__(RK)
 
-
-def advanced_propagation(domain_0: ADS, t0: float, tf: float) -> ADS:
-    """
-    Advanced ADS propagation function.
-    """
-    x0 = domain_0.manifold
-    xf = RK78(x0, t0, tf, TBP)
-    return ADS(domain_0.box, domain_0.nsplit, xf)
+    def f(self, x, t):
+        return TBP(x,t)
 
 
 # functions for figures
-def figure_1(XF: NDArray[np.double], Ns: float, tgrid: NDArray[np.double], instants: List[int] = [0, 1, 2, 4, 6, 9, 12, 16]) -> plt.Axes:
-    _, ax = plt.subplots()
-    for j in instants:
-        for i in range(4):
-            ax.plot(XF[0,j, Ns * i : Ns * (i + 1)], XF[1, j, Ns * i : Ns * (i + 1)], color='black')
-            label = "{:.2f}".format(tgrid[j])
-            ax.annotate("$t_i = $ " + label, # this is the text
-                        (XF[0,j,0],XF[1,j,0]), # these are the coordinates to position the label
-                        textcoords="offset points", # how to position the text
-                        xytext=(0,10), # distance from text to points (x,y)
-                        ha='center') # horizontal alignment can be left, right or center
-    ax.plot(0, 0, marker="o", markeredgecolor="black", markerfacecolor="none")
-    ax.grid('minor',  linestyle=':')
-    ax.set_xlabel('x (-)')
-    ax.set_ylabel('y (-)')
-    return ax
+def figure_1(
+        final_lists: List[List[ADS]], 
+        XF: NDArray[np.double], 
+        XF6: NDArray[np.double],
+        Ns: int, 
+        perimeter_norm: NDArray[np.double], 
+        time_analysis: NDArray[np.int32],
+        ) -> plt.Axes:
+    
+    final_map_list = []
+    final_domain_list = []
 
-def figure_2(XF: NDArray[np.double], XF1: NDArray[np.double], XF2: NDArray[np.double], XF6: NDArray[np.double],
-             Ns: int, analysis_time: int = 16) -> plt.Axes:
-    _ , ax = plt.subplots()
-    for i in range(4):
-        ax.plot(XF[0, analysis_time, Ns * i : Ns * (i + 1)], XF[1, analysis_time, Ns * i : Ns * (i + 1)], color='black')
-        ax.plot(XF1[0, analysis_time, Ns * i : Ns * (i + 1)], XF1[1, analysis_time, Ns * i : Ns * (i + 1)], color='black',  linestyle='--')
-        ax.plot(XF2[0, analysis_time, Ns * i : Ns * (i + 1)], XF2[1, analysis_time, Ns * i : Ns * (i + 1)], color='black', linestyle=':')
-        ax.plot(XF6[0, analysis_time, Ns * i : Ns * (i + 1)], XF6[1, analysis_time, Ns * i : Ns * (i + 1)], color='black',  linestyle='-.')
-        ax.legend(("Nominal","1st order", "2nd order", "6th order"),
-          shadow=True, loc="best", handlelength=1.5, fontsize=16)
-    ax.grid('minor',  linestyle=':')
-    ax.set_xlabel('x (-)')
-    ax.set_ylabel('y (-)')
-    return ax
-
-def figure_3(XF: NDArray[np.double], XF6: NDArray[np.double], XF14: NDArray[np.double], Ns: int, analysis_time: int = 16) -> plt.Axes:
-    _ , ax = plt.subplots(nrows=1,ncols=2)
-
-    for i in range(4):
-        ax[0].plot(XF[0, analysis_time, Ns * i : Ns * (i + 1)], XF[1, analysis_time, Ns * i : Ns * (i + 1)], color='black')
-        ax[1].plot(XF[0, analysis_time, Ns * i : Ns * (i + 1)], XF[1, analysis_time, Ns * i : Ns * (i + 1)], color='black')
-        ax[0].plot(XF6[0, analysis_time, Ns * i : Ns * (i + 1)], XF6[1, analysis_time, Ns * i : Ns * (i + 1)], color='black',  linestyle='-.')
-        ax[1].plot(XF14[0, analysis_time, Ns * i : Ns * (i + 1)], XF14[1, analysis_time, Ns * i : Ns * (i + 1)], color='black',  linestyle=':')
-        ax[0].legend(("Nominal","6th order"),
-          shadow=True, loc="best", handlelength=1.5, fontsize=16)
-        ax[1].legend(("Nominal","14th order"),
-          shadow=True, loc="best", handlelength=1.5, fontsize=16)
-    ax[0].grid('minor',  linestyle=':')
-    ax[0].set_xlabel('x (-)')
-    ax[0].set_ylabel('y (-)')
-    ax[1].grid('minor',  linestyle=':')
-    ax[1].set_xlabel('x (-)')
-    ax[1].set_ylabel('y (-)')
-
-    return ax
-
-
-def figure_4(
-    final_lists: List[List[ADS]], XF: NDArray[np.double], XF14: NDArray[np.double],
-    Ns: int, perimeter_norm: NDArray[np.double], time_analysis: NDArray[np.int32],
-) -> plt.Axes:
-
-    final_map_list=[]
-    final_domain_list=[]
     for i in range(len(time_analysis)): # first interesting one is 16?
-        final_manifold = np.zeros((4,perimeter_norm.shape[0],len(final_lists[i])))
-        final_domain = np.zeros((4,perimeter_norm.shape[0], len(final_lists[i])))
+        final_manifold = np.zeros((4, perimeter_norm.shape[0], len(final_lists[i])))
+        final_domain = np.zeros((4, perimeter_norm.shape[0], len(final_lists[i])))
         for j in range(len(final_lists[i])):
             for k in range(perimeter_norm.shape[0]):
-                final_manifold[:,k,j] = final_lists[i][j].manifold.eval(perimeter_norm[k,:])
-                final_domain[:,k,j] = final_lists[i][j].box.eval(perimeter_norm[k,:])
+                final_manifold[:, k, j] = final_lists[i][j].manifold.eval(perimeter_norm[k, :])
+                final_domain[:, k, j] = final_lists[i][j].box.eval(perimeter_norm[k, :])
         final_map_list.append(final_manifold)
         final_domain_list.append(final_domain)
 
     for i in range(len(time_analysis)):
-        fig , ax = plt.subplots(nrows=1,ncols=2)
+        fig , ax = plt.subplots(nrows = 1, ncols = 2)
         for j in range(final_map_list[i].shape[2]):
             for k in range(4):
-                ax[0].plot(XF[0,time_analysis[i], Ns * k : Ns * (k + 1)], XF[1,time_analysis[i], Ns * k : Ns * (k + 1)], color='black',  linestyle=':')
-                ax[0].plot(XF14[0,time_analysis[i], Ns * k : Ns * (k + 1)], XF14[1,time_analysis[i], Ns * k : Ns * (k + 1)], color='black',  linestyle='--')
-                ax[0].plot(final_map_list[i][0, Ns * k : Ns * (k + 1),j],final_map_list[i][1, Ns * k : Ns * (k + 1),j], color='black')
-                ax[1].plot(final_domain_list[i][0, Ns * k : Ns * (k + 1),j],final_domain_list[i][1, Ns * k : Ns * (k + 1),j], color='black')
+                ax[0].plot(XF[0, time_analysis[i], Ns * k : Ns * (k + 1)], XF[1, time_analysis[i], Ns*k : Ns*(k+1)], color='black', linestyle=':')
+                ax[0].plot(XF6[0, time_analysis[i], Ns * k : Ns * (k + 1)], XF6[1,time_analysis[i], Ns * k : Ns * (k + 1)], color='black', linestyle='--')
+                ax[0].plot(final_map_list[i][0, Ns * k : Ns * (k + 1), j], final_map_list[i][1, Ns * k : Ns * (k + 1), j], color='black')
+                ax[1].plot(final_domain_list[i][0, Ns * k : Ns * (k + 1), j], final_domain_list[i][1, Ns * k : Ns * (k + 1), j], color='black')
 
-        ax[0].grid('minor',  linestyle=':')
+        ax[0].grid('minor', linestyle = ':')
         ax[0].set_xlabel('x (-)')
         ax[0].set_ylabel('y (-)')
-        ax[1].grid('minor',  linestyle=':')
+        ax[1].grid('minor', linestyle = ':')
         ax[1].set_xlabel('x (-)')
         ax[1].set_ylabel('y (-)')
         ax[0].set_title('mapped domain')
         ax[1].set_title('initial domain')
-        ax[0].legend(("Nominal", "14th order", "ADS 14th order"),
-          shadow=True, loc="best", handlelength=1.5, fontsize=16)
-        fig.suptitle(' Time of analysis : '+ str(time_analysis[i]), fontsize=20)
+        ax[0].legend(("Nominal", "6th order", "ADS 6th order"),
+                     shadow = True, loc = "best", handlelength = 1.5, fontsize = 16)
+        fig.suptitle(' Time of analysis : '+ str(time_analysis[i]), fontsize = 20)
 
+def figure_2(
+        final_lists: List[List[ADS]], 
+        XF: NDArray[np.double], 
+        XF14: NDArray[np.double],
+        Ns: int, 
+        perimeter_norm: NDArray[np.double], 
+        time_analysis: NDArray[np.int32],
+        ) -> plt.Axes:
+    
+    final_map_list = []
+    final_domain_list = []
+    
+    for i in range(len(time_analysis)): # first interesting one is 16?
+        final_manifold = np.zeros((4, perimeter_norm.shape[0], len(final_lists[i])))
+        final_domain = np.zeros((4, perimeter_norm.shape[0], len(final_lists[i])))
+        for j in range(len(final_lists[i])):
+            for k in range(perimeter_norm.shape[0]):
+                final_manifold[:, k, j]=final_lists[i][j].manifold.eval(perimeter_norm[k, :])
+                final_domain[:, k, j]=final_lists[i][j].box.eval(perimeter_norm[k, :])
+        final_map_list.append(final_manifold)
+        final_domain_list.append(final_domain)
 
-def figure_5(Ts: int, tgrid: NDArray[np.double], final_lists: List[List[ADS]]) -> plt.Axes:
-    nsplit = np.zeros((Ts))
-    nsplit[0]= 1
+    for i in range(len(time_analysis)):
+        fig , ax = plt.subplots(nrows = 1,ncols = 2)
+        for j in range(final_map_list[i].shape[2]):
+            for k in range(4):
+                ax[0].plot(XF[0, time_analysis[i], Ns * k : Ns * (k + 1)], XF[1, time_analysis[i], Ns * k : Ns * (k + 1)], color = 'black', linestyle = ':')
+                ax[0].plot(XF14[0, time_analysis[i], Ns * k : Ns * (k + 1)], XF14[1, time_analysis[i], Ns * k : Ns * (k + 1)], color = 'black', linestyle = '--')
+                ax[0].plot(final_map_list[i][0, Ns * k : Ns * (k + 1), j],final_map_list[i][1, Ns * k : Ns * (k + 1), j], color = 'black')
+                ax[1].plot(final_domain_list[i][0, Ns * k : Ns * (k + 1), j],final_domain_list[i][1, Ns * k : Ns * (k + 1), j], color = 'black')
 
-    for i in range(Ts-1):
-        nsplit[i+1]=len(final_lists[i])
+        ax[0].grid('minor', linestyle = ':')
+        ax[0].set_xlabel('x (-)')
+        ax[0].set_ylabel('y (-)')
+        ax[1].grid('minor', linestyle = ':')
+        ax[1].set_xlabel('x (-)')
+        ax[1].set_ylabel('y (-)')
+        ax[0].set_title('mapped domain')
+        ax[1].set_title('initial domain')
+        ax[0].legend(("Nominal", "14th order", "ADS 6th order"),
+                     shadow = True, loc = "best", handlelength = 1.5, fontsize = 16)
+        fig.suptitle(' Time of analysis : '+ str(time_analysis[i]), fontsize = 20)
+
+def figure_3(
+        final_lists: List[List[ADSstate]], 
+        N0: int, 
+        T0: float, 
+        TF: float,
+        ) -> plt.Axes:
+    
+    uniqueTsplitList = np.sort(np.array(list(set([i for o in final_lists for i in o.splitTimes]))))
+    a = np.zeros((uniqueTsplitList.size, len(final_lists)))
+    for i in range(uniqueTsplitList.size):
+        for j in range(len(final_lists)):
+            a[i, j] = final_lists[j].splitTimes.count(uniqueTsplitList[i])
+
+    multiplesplits = np.max(a, 1)
+    splitgrid = N0 + np.cumsum(multiplesplits)
+
+    if T0 not in uniqueTsplitList: 
+        uniqueTsplitList = np.insert(uniqueTsplitList, 0, T0)
+        splitgrid = np.insert(splitgrid, 0, N0)
+
+    uniqueTsplitList = np.append(uniqueTsplitList, TF)
+    splitgrid = np.append(splitgrid, splitgrid[-1])
 
     _ , ax = plt.subplots()
-    ax.plot(tgrid, nsplit)
-    ax.grid('minor',  linestyle=':')
+    ax.step(uniqueTsplitList, splitgrid, where = 'post')
+    ax.grid('minor', linestyle = ':')
     ax.set_xlabel('propagation time (-)')
     ax.set_ylabel('number of domains (-)')
 
     return ax
-
-
-def figure_6(
-    final_lists: List[List[ADS]], XF: NDArray[np.double], XF14: NDArray[np.double],
-    Ns: int, perimeter_norm: NDArray[np.double], time_analysis: NDArray[np.int32],
-) -> plt.Axes:
-
-    final_map_list=[]
-    final_domain_list=[]
-    for i in range(len(time_analysis)): # first interesting one is 16?
-        final_manifold = np.zeros((4,perimeter_norm.shape[0],len(final_lists[time_analysis[i]])))
-        final_domain = np.zeros((4,perimeter_norm.shape[0], len(final_lists[time_analysis[i]])))
-        for j in range(len(final_lists[time_analysis[i]])):
-            for k in range(perimeter_norm.shape[0]):
-                final_manifold[:,k,j] = final_lists[time_analysis[i]][j].manifold.eval(perimeter_norm[k,:])
-                final_domain[:,k,j] = final_lists[time_analysis[i]][j].box.eval(perimeter_norm[k,:])
-        final_map_list.append(final_manifold)
-        final_domain_list.append(final_domain)
-
-    for i in range(len(time_analysis)):
-        fig, ax = plt.subplots(nrows=1,ncols=2)
-        for j in range(final_map_list[i].shape[2]):
-            for k in range(4):
-                ax[0].plot(XF[0,time_analysis[i], Ns * k : Ns * (k + 1)], XF[1,time_analysis[i], Ns * k : Ns * (k + 1)], color='black',  linestyle=':')
-                ax[0].plot(XF14[0,time_analysis[i], Ns * k : Ns * (k + 1)], XF14[1,time_analysis[i], Ns * k : Ns * (k + 1)], color='black',  linestyle='--')
-                ax[0].plot(final_map_list[i][0, Ns * k : Ns * (k + 1),j],final_map_list[i][1, Ns * k : Ns * (k + 1),j], color='black')
-                ax[1].plot(final_domain_list[i][0, Ns * k : Ns * (k + 1),j],final_domain_list[i][1, Ns * k : Ns * (k + 1),j], color='black')
-
-        ax[0].grid('minor',  linestyle=':')
-        ax[0].set_xlabel('x (-)')
-        ax[0].set_ylabel('y (-)')
-        ax[1].grid('minor',  linestyle=':')
-        ax[1].set_xlabel('x (-)')
-        ax[1].set_ylabel('y (-)')
-        ax[0].set_title('mapped domain')
-        ax[1].set_title('initial domain')
-        ax[0].legend(("Nominal", "14th order", "ADS 14th order"),
-          shadow=True, loc="best", handlelength=1.5, fontsize=16)
-        fig.suptitle(' Time of analysis : '+ str(time_analysis[i]), fontsize=20)
 
 
 # beginning of example:
@@ -453,10 +415,6 @@ def main():
     # compute only highest order propagation and lower orders evaluated by truncating poly map
     try:
         # load the propagated domain if integration already exists
-        with (thisfolder / 'order_1.npy').open('rb') as f:
-            XF1 = np.load(f, allow_pickle = True)
-        with (thisfolder / 'order_2.npy').open('rb') as f:
-            XF2 = np.load(f, allow_pickle = True)
         with (thisfolder / 'order_6.npy').open('rb') as f:
             XF6 = np.load(f, allow_pickle = True)
         with (thisfolder / 'order_14.npy').open('rb') as f:
@@ -484,26 +442,6 @@ def main():
 
             x0 = xf
 
-        DA.pushTO(1)
-        XF1 = np.zeros((4,Ts,perimeter_norm.shape[0]))
-        x_sub = array.identity(2)
-        for i in range(Ts):
-            xf = XFN[:,i].copy()
-            xf_temp = xf.eval(x_sub)
-            for j in range(perimeter_norm.shape[0]):
-                XF1[:, i, j] = xf_temp.eval(perimeter_norm[j, :])
-        DA.popTO()
-
-        DA.pushTO(2)
-        XF2 = np.zeros((4,Ts,perimeter_norm.shape[0]))
-        x_sub = array.identity(2)
-        for i in range(Ts):
-            xf=XFN[:,i].copy()
-            xf_temp = xf.eval(x_sub)
-            for j in range(perimeter_norm.shape[0]):
-                XF2[:,i,j] = xf_temp.eval(perimeter_norm[j,:])
-        DA.popTO()
-
         DA.pushTO(6)
         XF6 = np.zeros((4,Ts,perimeter_norm.shape[0]))
         x_sub = array.identity(2)
@@ -520,31 +458,14 @@ def main():
             for j in range(perimeter_norm.shape[0]):
                 XF14[:,i,j]=xf.eval(perimeter_norm[j,:])
 
-        with (thisfolder / 'order_1.npy').open('wb') as f:
-            np.save(f, XF1, allow_pickle = True)
-        with (thisfolder / 'order_2.npy').open('wb') as f:
-            np.save(f, XF2, allow_pickle = True)
         with (thisfolder / 'order_6.npy').open('wb') as f:
             np.save(f, XF6, allow_pickle = True)
         with (thisfolder / 'order_14.npy').open('wb') as f:
             np.save(f, XF14, allow_pickle = True)
 
 
-    ################ replication of first figures from paper
-    ax1 = figure_1(XF, Ns, tgrid)
-    ax2_1 = figure_2(XF, XF1, XF2, XF6, Ns, 16)
-    ax2_2 = figure_2(XF, XF1, XF2, XF6, Ns, 33)
-    ax2_3 = figure_2(XF, XF1, XF2, XF6, Ns, 34)
-    ax3_2 = figure_3(XF, XF6, XF14, Ns, 33)
-    ax3_3 = figure_3(XF, XF6, XF14, Ns, 34)
-    ax3_4 = figure_3(XF, XF6, XF14, Ns, 35)
-    ax3_6 = figure_3(XF, XF6, XF14, Ns, 38)
-    ax3_8 = figure_3(XF, XF6, XF14, Ns, 39)
-
-
-    ################################## Naive ADS application #######################
-    # checks need to be performed at a later step
-    DA.init(14, 2)
+    ########################### Online ADS application ##########################
+    DA.init(6, 2)
     DA.setEps(1e-16)
     XI = array.zeros(4)
     XI[0] += 1.0 + xb * DA(1)
@@ -552,51 +473,28 @@ def main():
     XI[3] += np.sqrt(1.5)
     init_domain = ADS(XI, [])
 
-    init_list=[init_domain]
-    final_lists=[]
-
-    toll=1e-4
-    Nmax=100
-
-    time_analysis = [16, 33, 34, 35, 36, 37, 38, 39, 40]
-
-    start_basic = time.time()
-    for i in range(len(time_analysis)):
-        final_list = ADS.eval(
-            init_list, toll, Nmax,
-            lambda domain: base_propagation(domain, t0=0, tf=time_analysis[i]))
-        final_lists.append(final_list)
-
-        print('time ', time_analysis[i], ' reached!')
-    print('execution time base ADS: ', time.time() - start_basic)
-
-
-    ax4 = figure_4(final_lists, XF, XF14, Ns, perimeter_norm, time_analysis)
-
-
-    ####################### Advanced ADS application #######################
-
-    init_domain = ADS(XI, [])
-
     init_list = [init_domain]
-    final_lists = []
-    final_list = init_list.copy()
-    final_lists.append(final_list) # add also initial domains
+    N0 = len(init_list)
 
-    start_advanced = time.time()
-    for i in range(Ts - 1):
-        final_list = ADS.eval(
-            final_list, toll, Nmax,
-            lambda domain: advanced_propagation(domain, t0=tgrid[i], tf=tgrid[i+1]))
-        final_lists.append(final_list)
+    toll = 1e-4
+    Nmax = 100
 
-        print('time ', tgrid[i+1], 'reached!')
-    print('execution time advanced ADS: ', time.time() - start_advanced)
+    TFlocal = 35
 
+    # new part wrt the other tutorial!
+    propagator_78 = AutomaticADS_TBP_integrator(RK.RK78())
+    propagator_78.loadTime(T0, TFlocal)
+    propagator_78.loadTol(20*1e-12, 1e-12)
+    propagator_78.loadStepSize()
+    propagator_78.loadADSopt(toll, Nmax)
+    
+    listOut = propagator_78.propagate(init_list, T0, TFlocal)
 
-    ###################### Replication of ADS figures ######################
-    figure_5(Ts, tgrid, final_lists)
-    figure_6(final_lists, XF, XF14, Ns, perimeter_norm, time_analysis)
+    DomainList = [o.ADSPatch for o in listOut]
+
+    ax1 = figure_1([DomainList], XF, XF6, Ns, perimeter_norm, [TFlocal])
+    ax2 = figure_2([DomainList], XF, XF14, Ns, perimeter_norm, [TFlocal])
+    ax3 = figure_3(listOut, N0, T0, TFlocal)
 
     plt.show()
 
