@@ -92,7 +92,7 @@ class ADS(metaclass=PrettyType):
         Raises:
             DACEException
         """
-        return np.sum(self.countSplits()) < N_max
+        return np.sum(self.countSplits()) <= N_max
 
     def countSplits(self) -> NDArray[np.int_]:
         """
