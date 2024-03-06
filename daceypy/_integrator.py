@@ -301,8 +301,8 @@ class integrator(metaclass=PrettyType):
         Loads initial and final propagation times inside an instance of integrator class.
 
         Args:
-            t1: initial time (either daceypy.DA or float)
-            t2: final time (either daceypy.DA or float)
+            t1: initial time
+            t2: final time
         """
         if not isinstance(t1, float):
             if isinstance(t1, int):
