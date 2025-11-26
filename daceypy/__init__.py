@@ -50,6 +50,7 @@ from . import op
 from ._ADS import ADS
 from . import RK
 from ._integrator import integrator
+from ._integrator import integrator_optimized 
 from ._ADSintegrator import ADSintegrator
 
 init = DA.init
