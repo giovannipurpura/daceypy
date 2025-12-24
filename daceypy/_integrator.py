@@ -510,3 +510,256 @@ def PicardLindelof(
         x_i = x + f(x_i, t).integ(direction)
 
     return x_i
+
+class integrator_optimized(integrator):
+    """
+    Extended integrator optimised for reduced computational time, supporting time-vector propagation and both stepwise and direct DA variants.
+    """
+
+    def __init__(
+        self,
+        RKcoeff: Optional[RKCoeff] = RK78(),
+        stateType: Optional[Type] = np.ndarray,
+        DA_type="DA_direct",
+    ) -> None:
+
+        # call parent constructor
+        super().__init__(RKcoeff, stateType)
+
+        # store additional attribute on DA type
+        self.DA_type = DA_type
+
+    def _Initialize(
+        self,
+        Initset: Union[daceypy.array, NDArray[np.double]],
+        t0: float,
+    ) -> None:
+        """
+        Initializes the state and time of the propagator.
+
+        Args:
+            Initset: initial state (either numpy.ndarray or daceypy.array)
+            t0: initial time of the propagation
+        Raises:
+            TypeError
+        """
+        self._runningX = Initset
+        self._runningTime = t0
+        self._input.t = t0
+        if type(self._runningX) is not self._stateType:
+            raise TypeError(
+                "propagator was initialized to propagate "
+                f"(\"{self._stateType}\") however, "
+                f"(\"{type(self._runningX)}\") was given")
+    
+
+    def _computeStep(self) -> \
+        Tuple[Union[daceypy.array, NDArray[np.double]], Union[daceypy.array, NDArray[np.double]]]:
+        """
+        Computes the state after one propagation step according to the
+        selected numerical scheme.
+        Returns:
+            Two states propagated at different orders to check error for stepsize adaptation.
+        """
+        # Preallocate
+        n_states = self._runningX.size
+        n_stages = self._RKcoeff.RK_stage
+        Y = self._inputType.zeros((n_states, n_stages))
+        F = self._inputType.zeros((n_states, n_stages))
+        
+        # Precompute all h-multiplied coefficients
+        h = self._input.h
+        t_base = self._input.t
+        h_gamma = h * self._RKcoeff.gamma
+        h_alpha = h * self._RKcoeff.alpha
+        h_beta = h * self._RKcoeff.beta
+        
+        # Build alpha matrix: alpha_matrix[i, j] contains the coefficient for stage i, previous stage j
+        alpha_matrix = np.zeros((n_stages, n_stages))
+        ia = 0
+        for i in range(1, n_stages):
+            for j in range(i):
+                alpha_matrix[i, j] = h_alpha[ia]
+                ia += 1
+        
+        # Initial state
+        Y[:, 0] = self._runningX
+        F[:, 0] = self.f(Y[:, 0], t_base + h_gamma[0])
+        
+        # Initialize solution and error
+        pn = self._runningX + h_beta[0] * F[:, 0]
+        pndiff = (self._RKcoeff.beta_star[0] - self._RKcoeff.beta[0]) * F[:, 0]
+        
+        # Remaining stages (vectorized)
+        for i in range(1, n_stages):
+            # Vectorized: matrix-vector multiplication replaces inner loop
+            # F[:, :i] is (n_states x i), alpha_matrix[i, :i] is (i,)
+            # Result is (n_states,)
+            Yk = F[:, :i] @ alpha_matrix[i, :i]
+            
+            Y[:, i] = self._runningX + Yk
+            F[:, i] = self.f(Y[:, i], t_base + h_gamma[i])
+            
+            # Update solution and error estimate
+            pn += h_beta[i] * F[:, i]
+            pndiff += (self._RKcoeff.beta_star[i] - self._RKcoeff.beta[i]) * F[:, i]
+        
+        pndiff *= h
+        
+        return pn, pndiff
+
+    def _adaptStepSize(self) -> None:
+        """
+        Adapt the stepsize according to step error.
+        """
+        if self._err == 0.0:
+            self._input.h = 4.0
+        else:
+            # Compute scaling factor
+            exponent = 1.0 / (self._RKcoeff.RK_order + 1.0)
+            scale = 0.9 * pow(1.0 / self._err, exponent)
+            scale = min(4.0, max(0.1, scale))
+            self._input.h *= scale
+        
+        # Get absolute step size once
+        abs_h = abs(self._input.h)
+        
+        # Check minimum step size
+        if abs_h <= self._input.minh * 1.2:
+            self._input.h /= 3.0
+            print(" --- WARNING MINIMUM STEP SIZE REACHED.")
+            abs_h /= 3.0  # Update abs_h to avoid recomputing
+        
+        # Enforce maximum step size (reuse abs_h)
+        if abs_h > self._input.maxh:
+            self._input.h = self._propDir * self._input.maxh
+            abs_h = self._input.maxh  # Update for next check
+        
+        # Ensure we don't overshoot final time (reuse abs_h)
+        dt_remaining = abs(self._tf - self._input.t)
+        if dt_remaining < abs_h:
+            self._input.h = self._propDir * dt_remaining
+
+    def propagate(self, Initset: Union[daceypy.array, NDArray[np.double]], *args):
+        """
+        Propagates the state and returns the state evaluated at all times in t_eval.
+        Supports both forward (t0 < tf) and backward (t0 > tf) propagation.
+        
+        DA_direct: Forces integration steps exactly on t_eval points (NO interpolation)
+        DA_stepwise: Forces integration steps exactly on t_eval points, reinitializes DA at each point
+        """
+        t_eval = self._parse_time_arguments(*args)
+        self._initialize_propagation(Initset, t_eval)
+        
+        # Determine propagation direction
+        forward = t_eval[-1] >= t_eval[0]
+        
+        states = []
+        t_eval_index = 0
+        
+        # Store initial condition if requested
+        if t_eval_index < len(t_eval) and abs(t_eval[t_eval_index] - self._input.t) < 1e-12:
+            states.append(self._runningX.copy())
+            t_eval_index += 1
+        
+        # Prepare DA identity for stepwise mode
+        if self.DA_type == "DA_stepwise":
+            dim_state = len(self._runningX)
+            da_id = daceypy.array.identity(dim_state)
+        
+        # ---------- Integration loop ----------
+        while not self._ReachsFinalTime() and not self._CallBack_CheckEvent():
+            # Check if all eval points processed
+            if t_eval_index >= len(t_eval):
+                break
+            
+            next_teval = t_eval[t_eval_index]
+            
+            # Prepare and adjust step
+            self._prepare_integration_step()
+            
+            # Adjust step size to land exactly on next t_eval point
+            would_overshoot = ((self._input.t + self._input.h > next_teval) if forward 
+                            else (self._input.t + self._input.h < next_teval))
+            
+            if would_overshoot:
+                self._input.h = next_teval - self._input.t
+            
+            # Execute and finalize step
+            v1 = self._execute_integration_step()
+            self._finalize_integration_step(v1)
+            
+            # Store state if we landed on a t_eval point
+            if self._input.t == next_teval:
+                states.append(self._runningX.copy())
+                t_eval_index += 1
+                
+                # Reinitialize DA expansion for stepwise mode
+                if self.DA_type == "DA_stepwise" and t_eval_index < len(t_eval):
+                    const_part = self._runningX.cons()
+                    self._runningX = da_id.copy()
+                    self._runningX += const_part
+        
+        self._set_final_outputs()
+        return states
+
+
+    def _parse_time_arguments(self, *args):
+        """Parse and validate time arguments. Does NOT sort - preserves direction."""
+        if len(args) == 2:  # (t0, tf)
+            t0, tf = args
+            t_eval = np.array([t0, tf], dtype=float)
+        elif len(args) == 1:  # (t_eval,)
+            t_eval = args[0]
+            if np.isscalar(t_eval):
+                t_eval = np.array([0.0, float(t_eval)])
+            else:
+                t_eval = np.asarray(t_eval, dtype=float)
+        else:
+            raise TypeError("integrate() accepts either (t0, tf) or (t_eval,)")
+        
+        return t_eval
+
+
+    def _initialize_propagation(self, Initset: Union[daceypy.array, NDArray[np.double]], t_eval:np.ndarray):
+        """Initialize the integrator for propagation."""
+        self._Initialize(Initset, t_eval[0])
+        self._checkStep = False
+
+
+    def _prepare_integration_step(self):
+        """Prepare for the next integration step."""
+        dt = self._CallBack_getStepSize()
+        self._input.h = abs(self._input.h) * dt / abs(self._DT)
+        
+        # Backup state
+        self._backX = self._runningX
+        self._backTime = self._input.t
+        self._backH = self._input.h
+
+
+    def _execute_integration_step(self):
+        """Execute one integration step and return results."""
+        v1, v1diff = self._computeStep()
+        self._epstol = self._getepstol(v1)
+        self._err = self._geterr(v1diff)
+        return v1
+
+
+    def _finalize_integration_step(self, v1:  Union[daceypy.array, NDArray[np.double]]):
+        """Accept step and adapt step size."""
+        t_new = self._input.t + self._input.h
+        self._acceptStep(v1, t_new)
+        self._adaptStepSize()
+
+
+    def _set_final_outputs(self):
+        """Set final output values."""
+        self._tout = self._input.t
+        self._outX = self._runningX
+
+
+
+
+
+
