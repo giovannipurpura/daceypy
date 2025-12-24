@@ -1161,7 +1161,7 @@ def _eliminate(k: int, A: array, R: List[int]):
         if j != k:
             A[R[k], j] /= A[R[k], k]
 
-    A[R[k], k] **= -1
+    A[R[k], k] = 1 / A[R[k], k]
 
     for i in range(n):
         if i != k:
