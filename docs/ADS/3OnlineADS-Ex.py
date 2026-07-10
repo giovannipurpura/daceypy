@@ -8,11 +8,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
 
-from daceypy import ADS, DA, array, RK
-from daceypy import ADSintegrator, ADSintegrator_optimized
+from daceypy import ADS, DA, array, RK, ADSintegrator
 from daceypy._ADSintegrator import ADSstate
-
-import time
 
 # setup better images (tex fonts)
 plt.rcParams.update({
@@ -212,17 +209,6 @@ def TBP(x: array, t: float) -> array:
     acc: array = -mu * pos / (r ** 3)
     dx = vel.concat(acc)
     return dx
-
-
-class AutomaticADS_TBP_integrator_optimized(ADSintegrator_optimized):
-    """
-    Custom child class of ADSintegrator to select dynamics.
-    """
-    def __init__(self, RK: RK.RKCoeff = RK.RK78()):
-        super(AutomaticADS_TBP_integrator_optimized, self).__init__(RK)
-
-    def f(self, x, t):
-        return TBP(x,t)
 
 
 class AutomaticADS_TBP_integrator(ADSintegrator):
@@ -479,12 +465,12 @@ def main():
 
 
     ########################### Online ADS application ##########################
-    DA.init(2, 6)
+    DA.init(6, 2)
     DA.setEps(1e-16)
     XI = array.zeros(4)
     XI[0] += 1.0 + xb * DA(1)
     XI[1] += 0.0 + yb * DA(2)
-    XI[3] += np.sqrt(1.5)           
+    XI[3] += np.sqrt(1.5)
     init_domain = ADS(XI, [])
 
     init_list = [init_domain]
@@ -501,6 +487,7 @@ def main():
     propagator_78.loadTol(20*1e-12, 1e-12)
     propagator_78.loadStepSize()
     propagator_78.loadADSopt(toll, Nmax)
+    
     listOut = propagator_78.propagate(init_list, T0, TFlocal)
 
     DomainList = [o.ADSPatch for o in listOut]
@@ -512,6 +499,7 @@ def main():
     plt.show()
 
     print('End')
+
 
 if __name__ == "__main__":
     main()
