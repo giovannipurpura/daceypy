@@ -242,6 +242,7 @@ def assign_points_to_domains(
                     },
                 },
                 'indices': idx,
+                'point_indices': idx,
                 "physical_points": physical_points,
                 "adimensional_points": adimensional_points,
             }
@@ -335,7 +336,9 @@ def prepare_visualization_data(
         point_to_domain = np.full(n_points, -1, dtype=np.int64)
         for assignment in point_assignments:
             domain_idx: int = assignment['domain_index']
-            point_indices: np.ndarray = assignment['point_indices']
+            point_indices: np.ndarray = assignment.get('point_indices', assignment.get('indices'))
+            if point_indices is None:
+                raise KeyError("point assignment must contain 'point_indices' or 'indices'")
             point_to_domain[point_indices] = domain_idx
     
     # Prepare visualization data

@@ -150,7 +150,7 @@ def _get_box_corners(box):
 # Public function
 # ─────────────────────────────────────────────────────────────────────────────
  
-def plot_ADS_boxes_3D(
+def plot_ADS_boxes_2D(
     domain_boxes,
     points=None,
     rotation=None,
@@ -660,7 +660,7 @@ def main():
     final_states_opt,
     DA_order=n_order_DA,
     )
-    plot_ADS_boxes_3D(
+    plot_ADS_boxes_2D(
         boxes_opt,
         title_prefix=" standard domain evolution",
         save=False,
@@ -675,7 +675,7 @@ def main():
     final_states_std,
     DA_order=n_order_DA,
     )
-    plot_ADS_boxes_3D(
+    plot_ADS_boxes_2D(
         boxes_std,
         title_prefix=" standard domain evolution",
         save=False,
