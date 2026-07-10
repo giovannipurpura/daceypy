@@ -246,22 +246,8 @@ daceypy/
   setup.cfg
 ```
 
-The repository also contains generated/experimental artifacts such as benchmark
-or propagation images, for example:
-
-- `da_propagation_timing_violin.png`
-- `da_truncation_order_timing_violin.png`
-- `cr3bp_domain_evolution_optimized.png`
 
 ## Documentation and Examples
-
-Start from [`docs/index.md`](docs/index.md). It links to:
-
-- the basic Python and Jupyter examples
-- differences between DACEyPy and DACE C++
-- translated DACE tutorial examples
-- ADS examples, including basic, advanced, online ADS, and optimized ADS usage
-
 The tutorials under `docs/Tutorials` include Python translations of the original
 DACE C++ tutorial material.
 
