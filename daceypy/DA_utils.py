@@ -1,11 +1,11 @@
 from __future__ import annotations
-from typing import List, Dict, Union, Optional
-from itertools import permutations
+from typing import List, Dict, Union, Optional, Sequence
+from itertools import permutations, combinations_with_replacement
 from math import factorial
 from collections import Counter
 import numpy as np
 from numpy.typing import NDArray
-
+from functools import reduce
 
 def fill_symmetric_tensor(
     tensor: NDArray[np.float64],
@@ -212,3 +212,87 @@ def _infer_max_order(sol_j) -> int:
             if order > max_ord:
                 max_ord = order
     return max_ord
+
+
+def assign_taylor_to_da(
+    taylor_maps: Union[Dict[str, np.ndarray], List[Dict[str, np.ndarray]]],
+    da_vars,
+):
+    """
+    Write the Taylor tensor values back into the monomial coefficients of
+    `da_vars`, in place. This mirrors `extract_map`'s monomial walk exactly,
+    but assigns `monomial.m_coeff.value` instead of reading it — no new
+    monomials are created and no algebra (multiplication of da_vars) is
+    performed; only existing coefficients are overwritten.
+
+    Parameters
+    ----------
+    taylor_maps : dict or list[dict]
+        Output of `extract_map`.
+    da_vars : DA state vector or list of DA state vectors
+        The DA object(s) whose monomial coefficients will be overwritten.
+        Must already have the same monomial support (order, variables) as
+        the `sol` originally passed to `extract_map` — typically you pass
+        `sol` itself (or a copy of it) here.
+
+    Returns
+    -------
+    The same `da_vars` object(s), mutated in place.
+    """
+    is_list = isinstance(taylor_maps, list)
+    maps_list = taylor_maps if is_list else [taylor_maps]
+
+    if is_list:
+        if not _is_list_of_da_vectors(da_vars) or len(da_vars) != len(maps_list):
+            raise ValueError(
+                "'da_vars' must be a list of DA vectors matching the length "
+                "of 'taylor_maps' when the latter is a list."
+            )
+        da_vars_list = da_vars
+    else:
+        da_vars_list = [da_vars]
+
+    for tm, sol_j in zip(maps_list, da_vars_list):
+        _assign_single(tm, sol_j)
+
+    return da_vars if is_list else da_vars_list[0]
+
+
+def _assign_single(taylor_terms: Dict[str, np.ndarray], sol_j) -> None:
+    """Overwrite monomial coefficients of a single DA vector `sol_j` in place."""
+    max_order = max(
+        int(k.rsplit("_", 1)[-1])
+        for k in taylor_terms
+        if k.startswith("Taylor_order_")
+    )
+    n_state = len(sol_j)
+
+    for i in range(n_state):
+        n_monomials = sol_j[i].m_index.len + 1
+
+        for k in range(n_monomials):
+            monomial = sol_j[i].getMonomial(k)
+            m_jj = np.array(monomial.m_jj, dtype=int)
+            order = int(np.sum(m_jj))
+
+            if order > max_order:
+                continue
+
+            if order == 0:
+                new_coeff = float(taylor_terms["Taylor_order_0"][i])
+            else:
+                multi_idx = tuple(
+                    idx for idx, exp in enumerate(m_jj) for _ in range(exp)
+                )
+                T = taylor_terms[f"Taylor_order_{order}"][i]
+                adjusted_coeff = float(T[multi_idx])
+
+                # Undo the multinomial normalization applied in extract_map
+                counts = Counter(multi_idx)
+                multiplicity = factorial(order) / np.prod(
+                    [factorial(c) for c in counts.values()]
+                )
+                new_coeff = adjusted_coeff * multiplicity
+
+            # Only the coefficient changes — exponents/structure untouched.
+            monomial.m_coeff.value = new_coeff

@@ -334,6 +334,9 @@ def main():
     # Use xf_direct (map evaluated exactly at t_eval), consistent with the
     # rest of the analysis, rather than the reassigned all-steps array.
     maps = DA_utils.extract_map(xf_direct, max_order=2)
+    # if you want to assign new Taylor terms back to a DA object, you can do so:
+    taylor_da = DA_utils.assign_taylor_to_da(maps, xf_direct)
+    maps_post = DA_utils.extract_map(taylor_da)
 
     print("\nZeroth-order term (nominal final state):")
     print(maps[-1]["Taylor_order_0"])
@@ -343,6 +346,16 @@ def main():
 
     print("\nSecond-order term (Hessian — nonlinear sensitivities):")
     print(maps[-1]["Taylor_order_2"])
+
+    print("\nReassigned Taylor terms (should match the original):")
+    print("\nZeroth-order term (nominal final state):")
+    print(maps_post[-1]["Taylor_order_0"])
+
+    print("\nFirst-order term (State Transition Matrix — STM):")
+    print(maps_post[-1]["Taylor_order_1"])
+    
+    print("\nSecond-order term (Hessian — nonlinear sensitivities):")
+    print(maps_post[-1]["Taylor_order_2"])
 
     # -------------------------------------------------------------------------
     # Test 7: Evaluate DA map with a small displacement
