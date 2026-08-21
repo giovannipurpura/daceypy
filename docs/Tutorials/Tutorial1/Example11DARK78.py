@@ -203,130 +203,139 @@ class TBP_integrator_optimized(integrator_optimized):
 
     def f(self, x, t):
         return TBP(x,t)
-    
+
+
+def build_optimized_propagator(t0, tf, DA_type, tol=1e-16, integrator=None):
+    """Factory to avoid repeating the loadTime/loadTol/loadStepSize boilerplate
+    every time a TBP_integrator_optimized instance is created."""
+    integrator = integrator or RK.RK78()
+    prop = TBP_integrator_optimized(integrator, array, DA_type=DA_type)
+    prop.loadTime(t0, tf)
+    prop.loadTol(tol, tol)
+    prop.loadStepSize()
+    return prop
+
 
 def main():
     # -------------------------------------------------------------------------
     # STEPWISE vs DIRECT DA PROPAGATION — CONCEPTUAL DIFFERENCE
     # -------------------------------------------------------------------------
-    # Legacy optimized implementation (“old opt”):
-    #   - Earlier optimisation version used a single DA expansion strategy,
-    #     generally behaving like DA_direct but less modular.
-    #   - Optimised numerical performance, but did not explicitly distinguish
-    #     between global and segmented DA map construction.
-
-    # DA_direct (current optimisation strategy):
+    # DA_direct:
     #   - Every DA map is referenced to the SAME initial time t0.
-    #   - For each evaluation time t in t_eval, the integrator builds a map t0 → t.
-    #   - Example with t_eval = [0, 500, 600]:
-    #         Map_1: t0 → 500
-    #         Map_2: t0 → 600
+    #   - For each evaluation time t in t_eval, the integrator builds a map t0 -> t.
     #   - Best suited for sensitivity analysis, uncertainty propagation,
     #     or Monte Carlo sampling around the SAME initial condition.
     #   - Accuracy may degrade over long propagation intervals if
     #     non-linearities grow significantly.
-
-    # DA_stepwise (new chaining-capable strategy):
+    #
+    # DA_stepwise:
     #   - DA maps are constructed LOCALLY between consecutive time segments.
     #   - The DA expansion is reset at each intermediate time, increasing accuracy.
-    #   - Example with t_eval = [0, 500, 600]:
-    #         Map_1: t0 → 500
-    #         Map_2: 500 → 600
-    #   - Does NOT directly yield a single map t0 → 600 — must be chained.
-
-    # Summary:
-    #   old_opt     = legacy single-map optimised implementation
-    #   direct      = “jump from t0 to any requested time”
-    #   stepwise    = “walk forward through segments”
-
+    #   - Does NOT directly yield a single map t0 -> tf — must be chained.
+    #
     # ASCII illustration:
     #   DIRECT:     t0 --------> t1
     #               t0 ---------------------> t2
     #
     #   STEPWISE:   t0 --------> t1 --------> t2
-    #
-    #   OLD OPT:    behaves conceptually like DIRECT, but without explicit control
     # -------------------------------------------------------------------------
     # Initialize DA and orbital parameters
     # -------------------------------------------------------------------------
 
     DA.init(2, 6)  # 2nd order, 6 variables
-    
+
     mu = 398600.4418  # [km^3/s^2]
-    
+
     ecc = 0.5
     x0 = array.identity(6)
     x0[0] += 6678.0
     x0[4] += np.sqrt(mu / 6678.0 * (1 + ecc))
-    
+
     a = 6678.0 / (1 - ecc)
     T = 2 * np.pi * np.sqrt(a**3 / mu)
-    
+
     print(f"Orbital period: {T:.2f} s, Semi-major axis: {a:.2f} km, Eccentricity: {ecc}")
-    
+
     t_eval = [0.0, 500.0, 600.0]
-    
+    t0, tf = t_eval[0], t_eval[-1]
+
     # -------------------------------------------------------------------------
-    # Test 1: Old integrator
+    # Test 1: Old (non-DA) integrator — reference solution
     # -------------------------------------------------------------------------
     print("\n=== TEST 1: OLD TBP_INTEGRATOR ===")
     propagator_old = TBP_integrator(RK.RK78(), array)
-    propagator_old.loadTime(t_eval[0], t_eval[-1])
+    propagator_old.loadTime(t0, tf)
     propagator_old.loadTol(1e-16, 1e-16)
     propagator_old.loadStepSize()
+
     start_old = time.perf_counter()
-    xf_old = propagator_old.propagate(x0, t_eval[0], t_eval[-1])
-    end_old = time.perf_counter()
-    time_old = end_old - start_old
+    xf_old = propagator_old.propagate(x0, t0, tf)
+    time_old = time.perf_counter() - start_old
     print(f"Old computational time: {time_old:.6f} s")
 
     # -------------------------------------------------------------------------
-    # Test 2: Optimized integrator
+    # Test 2: Optimized DA_direct integrator, evaluated only at t_eval
     # -------------------------------------------------------------------------
-    print("\n=== TEST 2: OPTIMIZED TBP_INTEGRATOR ===")
-    propagator_opt = TBP_integrator_optimized(RK.RK78(), array, DA_type="DA_direct")
-    propagator_opt.loadTime(t_eval[0], t_eval[-1])
-    propagator_opt.loadTol(1e-16, 1e-16)
-    propagator_opt.loadStepSize()
+    print("\n=== TEST 2: OPTIMIZED TBP_INTEGRATOR (DA_direct) ===")
+    propagator_direct = build_optimized_propagator(t0, tf, "DA_direct")
+
     start_opt = time.perf_counter()
-    xf_opt = propagator_opt.propagate(x0, t_eval)
-    end_opt = time.perf_counter()
-
-    time_opt = end_opt - start_opt
+    xf_direct = propagator_direct.propagate(x0, t_eval)
+    time_opt = time.perf_counter() - start_opt
     print(f"Optimised computational time: {time_opt:.6f} s")
-    
-    # -------------------------------------------------------------------------
-    # Compare classic vs optimized maps
-    # -------------------------------------------------------------------------
-    print("\n=== TEST 3: COMPARISON AND DA MAP EVALUATION ===")
-    map_diff_x = xf_opt[-1][0] - xf_old[0]
-    print(f"Difference between final states (old vs optimized):\n {map_diff_x}")
-    
-    # -------------------------------------------------------------------------
-    # (stepwise) propagation 
-    # -------------------------------------------------------------------------
-    print("\n=== TEST 4: STEP-WISE PROPAGATION ===")
 
-    propagator_step = TBP_integrator_optimized(RK.RK78(), array, DA_type="DA_stepwise")
-    propagator_step.loadTime(t_eval[0], t_eval[-1])
-    propagator_step.loadTol(1e-16, 1e-16)
-    propagator_step.loadStepSize()
+    # -------------------------------------------------------------------------
+    # Test 3: Compare old vs optimized final state
+    # (use .cons() to pull the constant/nominal part out of the DA object
+    #  before comparing it against the plain numeric result from Test 1)
+    # -------------------------------------------------------------------------
+    print("\n=== TEST 3: COMPARISON OLD vs DA_direct (final state) ===")
+    map_diff_final = xf_direct[-1][0] - xf_old[0]
+    print(f"Difference between final states (old vs optimized):\n {map_diff_final}")
+
+    # -------------------------------------------------------------------------
+    # Test 4: Optimized DA_direct integrator, saving every integration step
+    # -------------------------------------------------------------------------
+    print("\n=== TEST 4: OPTIMIZED TBP_INTEGRATOR (DA_direct) — all integrator steps ===")
+    propagator_direct_all = build_optimized_propagator(t0, tf, "DA_direct")
+
+    start_opt = time.perf_counter()
+    xf_direct_all, times_all = propagator_direct_all.propagate(x0, t_eval, save_all_times=True)
+    time_opt = time.perf_counter() - start_opt
+    print(f"Optimised computational time: {time_opt:.6f} s")
+
+    map_diff_final_all = xf_direct_all[-1][0] - xf_old[0]
+    print(f"Difference between final states (old vs optimized, all-steps map):\n {map_diff_final_all}")
+
+    # -------------------------------------------------------------------------
+    # Test 5: Stepwise propagation vs chained direct propagation
+    # -------------------------------------------------------------------------
+    print("\n=== TEST 5: STEP-WISE PROPAGATION ===")
+
+    propagator_step = build_optimized_propagator(t0, tf, "DA_stepwise")
     xf_step = propagator_step.propagate(x0, t_eval)
 
-    x_restart = xf_opt[-2].cons() + array.identity(6)
-    propagator_chain = TBP_integrator_optimized(RK.RK78(), array, DA_type="DA_direct")
-    propagator_chain.loadTime(t_eval[-2], t_eval[-1])
-    propagator_chain.loadTol(1e-16, 1e-16)
-    propagator_chain.loadStepSize()
+    # xf_direct[-2] is the state at t_eval[-2]; xf_direct_all[-2] is merely the
+    # penultimate accepted integrator step, which does not generally land on
+    # t_eval[-2] = 500 s — restarting the chain from xf_direct_all would start
+    # at the wrong time.
+    x_restart = xf_direct[-2].cons() + array.identity(6)
+    propagator_chain = build_optimized_propagator(t_eval[-2], t_eval[-1], "DA_direct")
     xf_chain = propagator_chain.propagate(x_restart, [t_eval[-2], t_eval[-1]])
-    
+
     map_diff_chain = xf_step[-1][0] - xf_chain[-1][0]
-    print(f"\n Difference between direct optimized and chained stepwise: \n {map_diff_chain}")
+    print(f"\nDifference between direct optimized and chained stepwise: \n {map_diff_chain}")
 
-    # Extract DA maps up to 2nd order
-    maps = DA_utils.extract_map(xf_opt, max_order=2)
-
-    print("\n\n=== TEST 5: EXTRACTION OF DA TAYLOR TERMS AT FINAL TIME ===")
+    # -------------------------------------------------------------------------
+    # Test 6: Extract Taylor terms of the DA map at the final time
+    # -------------------------------------------------------------------------
+    print("\n=== TEST 6: EXTRACTION OF DA TAYLOR TERMS AT FINAL TIME ===")
+    # Use xf_direct (map evaluated exactly at t_eval), consistent with the
+    # rest of the analysis, rather than the reassigned all-steps array.
+    maps = DA_utils.extract_map(xf_direct, max_order=2)
+    # if you want to assign new Taylor terms back to a DA object, you can do so:
+    taylor_da = DA_utils.assign_taylor_to_da(maps, xf_direct)
+    maps_post = DA_utils.extract_map(taylor_da)
 
     print("\nZeroth-order term (nominal final state):")
     print(maps[-1]["Taylor_order_0"])
@@ -336,17 +345,26 @@ def main():
 
     print("\nSecond-order term (Hessian — nonlinear sensitivities):")
     print(maps[-1]["Taylor_order_2"])
-    
+
+    print("\nReassigned Taylor terms (should match the original):")
+    print("\nZeroth-order term (nominal final state):")
+    print(maps_post[-1]["Taylor_order_0"])
+
+    print("\nFirst-order term (State Transition Matrix — STM):")
+    print(maps_post[-1]["Taylor_order_1"])
+
+    print("\nSecond-order term (Hessian — nonlinear sensitivities):")
+    print(maps_post[-1]["Taylor_order_2"])
+
     # -------------------------------------------------------------------------
-    # Evaluate DA map with small displacement
+    # Test 7: Evaluate DA map with a small displacement
     # -------------------------------------------------------------------------
     Deltax0 = np.array([1.0, -1.0, 0, 0, 0, 0])
-    xf_displaced = xf_opt[-1].eval(Deltax0)
+    xf_displaced = xf_direct[-1].eval(Deltax0)
 
-    print(f"\n=== TEST 6: DA map evaluation with Δx0 = {Deltax0} ===")
+    print(f"\n=== TEST 7: DA map evaluation with Δx0 = {Deltax0} ===")
     print(f"  Position: {xf_displaced[0]:.6f} km")
     print(f"  Velocity: {xf_displaced[3]:.6f} km/s")
-
 
 if __name__ == "__main__":
     main()

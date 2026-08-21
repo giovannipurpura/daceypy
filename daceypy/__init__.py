@@ -37,7 +37,11 @@ __all__ = (
     "ADS",
     "RK",
     "integrator",
+    "integrator_optimized",
     "ADSintegrator",
+    "ADSintegrator_optimized",
+    "ADS_utils",
+    "DA_utils"
 )
 
 from ._version import __version__
@@ -49,9 +53,12 @@ from ._Monomial import Monomial
 from . import op
 from ._ADS import ADS
 from . import RK
-from ._integrator import integrator, integrator_optimized 
-from ._ADSintegrator import ADSintegrator
+from ._integrator import integrator, integrator_optimized
+from ._ADSintegrator import ADSintegrator, ADSintegrator_optimized
+from . import ADS_utils
+from . import DA_utils
 
+# Convenient aliases
 init = DA.init
 isInitialized = DA.isInitialized
 zeros = array.zeros
