@@ -510,7 +510,7 @@ class ADSintegrator_optimized(integrator_optimized, metaclass=PrettyType):
                     # Create ADSstate for each intermediate point
                     tempD = ADSstate(
                         ADS(
-                            self._stack.ADSPatch.box,  # Bounding box of the domain
+                            self._stack.ADSPatch.box,  # Affine DA map of the domain's parallelepiped
                             self._stack.ADSPatch.nsplit,  # Split order parameter
                             xf[i],  # State at this time step
                         ),
@@ -537,7 +537,8 @@ class ADSintegrator_optimized(integrator_optimized, metaclass=PrettyType):
                 " and continued the propagation..."
             )
             
-            # Determine optimal split direction based on domain expansion
+            # Choose the split direction with the greedy heuristic in
+            # direction(), based on truncation error, not domain expansion
             dir = stateIn.direction()
             # Split the domain into left and right subdomains
             Dl, Dr = stateIn.split(dir)
@@ -644,10 +645,35 @@ class ADSintegrator_optimized(integrator_optimized, metaclass=PrettyType):
             integrator.propagate
         
         Note:
-            The initial time of the propagation MUST be set through 
-            integrator.loadTime and will be adapted online by each patch. 
+            The initial time of the propagation MUST be set through
+            integrator.loadTime and will be adapted online by each patch.
             The final time tf is fixed and MUST be set through integrator.loadTime.
-        """  
+
+        Raises:
+            NotImplementedError: if loadTime was configured for backward
+                propagation (t0 > tf). The time-range masks used to track
+                requested output points and split legs assume forward
+                propagation; used backward they select the wrong points
+                without any error, so backward propagation is rejected
+                explicitly here instead.
+            ValueError: if t_vect does not reach self._tf. Each domain is
+                propagated leg by leg towards the next requested point in
+                t_vect; once every point has been consumed the loop needs
+                a further target to keep advancing to self._tf, which is
+                only available if t_vect itself extends that far.
+        """
+        if self._propDir < 0:
+            raise NotImplementedError(
+                "ADSintegrator_optimized.propagate only supports forward "
+                "propagation (t0 < tf)."
+            )
+        if len(t_vect) == 0 or t_vect[-1] < self._tf:
+            raise ValueError(
+                "t_vect must include a final point at (or beyond) tf "
+                f"(={self._tf}); got t_vect ending at "
+                f"{t_vect[-1] if len(t_vect) else 'empty'}."
+            )
+
         # Create initial processing queue from input domains
         listIn = self._InitializeList(set, splitTimesList)
         
@@ -668,10 +694,10 @@ class ADSintegrator_optimized(integrator_optimized, metaclass=PrettyType):
                 t_vect_in = np.concatenate(
                     ([self._input.t], t_vect[t_vect > self._input.t])
                 )
-                
+
                 # Perform numerical integration step
                 xf = super(ADSintegrator_optimized, self).propagate(
-                    self._stack.ADSPatch.manifold, 
+                    self._stack.ADSPatch.manifold,
                     t_vect_in
                 )
 
@@ -702,7 +728,7 @@ class ADSintegrator_optimized(integrator_optimized, metaclass=PrettyType):
                     else:
                         # Final time reached: include all states
                         indices_to_use = indices_prop
-                    
+
                     # Append computed states to output structure
                     for i, idx in enumerate(indices_to_use):
                         listOut_tot[idx].append(listOut[i])

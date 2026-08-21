@@ -5,7 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 from daceypy import DA, array, RK, integrator, integrator_optimized, DA_utils
 import time
-mu = 398600.0  # km^3/s^2
+mu = 398600.4418  # [km^3/s^2] Earth gravitational parameter, used by TBP()
 
 
 def RK78(Y0: array, X0: float, X1: float, f: Callable[[array, float], array]):
@@ -244,8 +244,6 @@ def main():
 
     DA.init(2, 6)  # 2nd order, 6 variables
 
-    mu = 398600.4418  # [km^3/s^2]
-
     ecc = 0.5
     x0 = array.identity(6)
     x0[0] += 6678.0
@@ -327,15 +325,14 @@ def main():
     print(f"\nDifference between direct optimized and chained stepwise: \n {map_diff_chain}")
 
     # -------------------------------------------------------------------------
-    # Test 6: Extract Taylor terms of the DA map at the final time
+    # Test 6: Extract Taylor terms of the DA map at the final time, then
+    # write a perturbed tensor back into a copy of the DA state and verify
+    # the perturbation actually reached the DA object (not just the dict).
     # -------------------------------------------------------------------------
-    print("\n=== TEST 6: EXTRACTION OF DA TAYLOR TERMS AT FINAL TIME ===")
+    print("\n=== TEST 6: EXTRACTION AND RE-ASSIGNMENT OF DA TAYLOR TERMS ===")
     # Use xf_direct (map evaluated exactly at t_eval), consistent with the
     # rest of the analysis, rather than the reassigned all-steps array.
     maps = DA_utils.extract_map(xf_direct, max_order=2)
-    # if you want to assign new Taylor terms back to a DA object, you can do so:
-    taylor_da = DA_utils.assign_taylor_to_da(maps, xf_direct)
-    maps_post = DA_utils.extract_map(taylor_da)
 
     print("\nZeroth-order term (nominal final state):")
     print(maps[-1]["Taylor_order_0"])
@@ -346,15 +343,24 @@ def main():
     print("\nSecond-order term (Hessian — nonlinear sensitivities):")
     print(maps[-1]["Taylor_order_2"])
 
-    print("\nReassigned Taylor terms (should match the original):")
-    print("\nZeroth-order term (nominal final state):")
-    print(maps_post[-1]["Taylor_order_0"])
+    # Perturb one STM entry in the extracted tensor, then assign the modified
+    # map onto a *copy* of xf_direct (xf_direct itself is still needed below).
+    perturbation = 1.234e-3
+    original_entry = maps[-1]["Taylor_order_1"][0, 0]
+    maps[-1]["Taylor_order_1"][0, 0] = original_entry + perturbation
 
-    print("\nFirst-order term (State Transition Matrix — STM):")
-    print(maps_post[-1]["Taylor_order_1"])
+    xf_perturbed = [x.copy() for x in xf_direct]
+    DA_utils.assign_taylor_to_da(maps, xf_perturbed)
+    maps_post = DA_utils.extract_map(xf_perturbed, max_order=2)
+    reassigned_entry = maps_post[-1]["Taylor_order_1"][0, 0]
 
-    print("\nSecond-order term (Hessian — nonlinear sensitivities):")
-    print(maps_post[-1]["Taylor_order_2"])
+    print(f"\nSTM[0, 0] before perturbation: {original_entry}")
+    print(f"STM[0, 0] after assign_taylor_to_da: {reassigned_entry}")
+    assert abs(reassigned_entry - (original_entry + perturbation)) < 1e-9, (
+        "assign_taylor_to_da did not write the perturbed coefficient back "
+        "into the DA object"
+    )
+    print("assign_taylor_to_da correctly mutated the DA state")
 
     # -------------------------------------------------------------------------
     # Test 7: Evaluate DA map with a small displacement

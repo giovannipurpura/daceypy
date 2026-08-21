@@ -128,13 +128,18 @@ def extract_map(
 
     expansion = []
 
+    n_vars = daceypy.DA.getMaxVariables()
+
     for sol_j in sol_list:
         n_state = len(sol_j)
         taylor_terms = {}
 
-        # Pre-allocate tensors for each Taylor order
+        # Pre-allocate tensors for each Taylor order. The first axis is the
+        # state component (size n_state); the remaining `order` axes are DA
+        # variables (size n_vars) — the two can differ, e.g. a 3-component
+        # position state depending on a 6-variable DA (position + velocity).
         for order in range(max_order + 1):
-            shape = (n_state,) + (n_state,) * order
+            shape = (n_state,) + (n_vars,) * order
             taylor_terms[f"Taylor_order_{order}"] = np.zeros(shape)
 
         # 0th-order: nominal state (constant term)
@@ -268,5 +273,7 @@ def _assign_single(taylor_terms: Dict[str, np.ndarray], sol_j) -> None:
                 )
                 new_coeff = adjusted_coeff * multiplicity
 
-            # Only the coefficient changes — exponents/structure untouched.
-            monomial.m_coeff.value = new_coeff
+            # monomial is a copy returned by getMonomial: writing to
+            # monomial.m_coeff.value would not reach sol_j. setCoefficient
+            # writes the coefficient into sol_j[i] itself.
+            sol_j[i].setCoefficient(list(m_jj), new_coeff)

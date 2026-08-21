@@ -61,8 +61,8 @@ The repository includes precompiled dynamic-link libraries in `daceypy/lib` for:
 - macOS x86_64 and ARM64
 
 On other architectures, the DACE core must be recompiled as a dynamic library.
-See [`daceypy/lib/README.md`](daceypy/lib/README.md) for details and the DACE
-reference revision used for the bundled binaries.
+See [`daceypy/lib/README.md`](https://github.com/giovannipurpura/daceypy/blob/master/daceypy/lib/README.md)
+for details and the DACE reference revision used for the bundled binaries.
 
 ## Quick Start
 
@@ -95,8 +95,9 @@ print(sin_state)
 print(parsed - sin_x)
 ```
 
-More examples are available in [`docs/basic_example.py`](docs/basic_example.py)
-and [`docs/basic_example.ipynb`](docs/basic_example.ipynb).
+More examples are available in
+[`docs/basic_example.py`](https://github.com/giovannipurpura/daceypy/blob/master/docs/basic_example.py)
+and [`docs/basic_example.ipynb`](https://github.com/giovannipurpura/daceypy/blob/master/docs/basic_example.ipynb).
 
 ## Core API Overview
 
@@ -197,22 +198,13 @@ splitting:
 
 ## Adaptive Domain Splitting
 
-ADS is included for DA-based uncertainty propagation in nonlinear dynamics. It
-can split a DA domain when truncation error thresholds indicate that a single
-Taylor expansion is no longer accurate enough.
+ADS enables DA-based uncertainty propagation in nonlinear dynamics: it
+automatically splits a DA domain into sub-domains whenever the truncation
+error of its Taylor expansion grows past a configurable threshold.
 
-The ADS implementation provides:
-
-- domain splitting and replay through `ADS`
-- split direction and truncation-error checks
-- box center, width, and containment helpers
-- static evaluation of split domain collections
-- ADS-aware propagation through `ADSintegrator`
-- data extraction, point assignment, validation, and visualization utilities in
-  `ADS_utils`
-
-See [`docs/ADS/README.md`](docs/ADS/README.md) and the ADS examples for more
-details.
+See [the ADS overview, references, and examples](https://github.com/giovannipurpura/daceypy/blob/master/docs/ADS/README.md) for the
+full API (`ADS`, `ADSintegrator`, `ADSintegrator_optimized`, and the
+`ADS_utils` extraction/visualization helpers).
 
 ## Repository Layout
 
@@ -224,6 +216,7 @@ daceypy/
     _DA.py                   DA scalar implementation
     _array.py                NumPy-like DA array implementation
     _compiledDA.py           Compiled DA/Taylor map support
+    _Monomial.py             DA monomial coefficient/order metadata
     _ADS.py                  Adaptive Domain Splitting domain object
     _integrator.py           Adaptive RK integrators
     _ADSintegrator.py        ADS-aware integrators
@@ -231,6 +224,10 @@ daceypy/
     op.py / op.pyi           Operator functions and type stubs
     DA_utils.py              Taylor-map extraction utilities
     ADS_utils.py             ADS extraction/assignment/visualization utilities
+    _DACEException.py        Python exception wrapping native DACE error codes
+    _PrettyType.py           Metaclass giving DACEyPy classes a clean repr/module name
+    _version.py              Package version
+    get_platform.py          Platform detection for the bundled native libraries
     lib/                     Bundled native DACE libraries
   docs/
     index.md                 Documentation entry point
@@ -248,8 +245,10 @@ daceypy/
 
 
 ## Documentation and Examples
-The tutorials under `docs/Tutorials` include Python translations of the original
-DACE C++ tutorial material.
+
+See [`docs/index.md`](https://github.com/giovannipurpura/daceypy/blob/master/docs/index.md)
+for the full documentation entry point. The tutorials under `docs/Tutorials`
+include Python translations of the original DACE C++ tutorial material.
 
 ## Notes on DACE Compatibility
 
@@ -265,9 +264,11 @@ DACEyPy replicates most DACE C++ features, with Python-oriented differences:
 - `DA.fromText` and `array.fromText` can parse expressions, but should only be
   used with trusted input
 
-See [`docs/differences.md`](docs/differences.md) for the full notes.
+See [`docs/differences.md`](https://github.com/giovannipurpura/daceypy/blob/master/docs/differences.md)
+for the full notes.
 
 ## License
 
 DACEyPy is licensed under the Apache License, Version 2.0. See
-[`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+[`LICENSE`](https://github.com/giovannipurpura/daceypy/blob/master/LICENSE) and
+[`NOTICE`](https://github.com/giovannipurpura/daceypy/blob/master/NOTICE).
