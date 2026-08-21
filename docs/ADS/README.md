@@ -1,5 +1,19 @@
 # Adaptive Domain Splitting (ADS)
 
+ADS is included for DA-based uncertainty propagation in nonlinear dynamics. It
+can split a DA domain when truncation error thresholds indicate that a single
+Taylor expansion is no longer accurate enough.
+
+## API overview
+
+- domain splitting and replay through `ADS`
+- split direction and truncation-error checks
+- box center, width, and containment helpers
+- static evaluation of split domain collections
+- ADS-aware propagation through `ADSintegrator` and `ADSintegrator_optimized`
+- data extraction, point assignment, validation, and visualization utilities in
+  `ADS_utils`
+
 ## References
 
 Information about ADS can be found in:
@@ -14,3 +28,5 @@ This is the abstract of the article:
 
 - Example 1 (Basics) [Py](1Basics-Ex.py)
 - Example 2 (Advanced) [Py](2Advanced-Ex.py)
+- Example 3 (Online ADS propagation) [Py](3OnlineADS-Ex.py)
+- Example 4 (Optimized ADS propagation and benchmark) [Py](4OptimizedADS-Ex.py)

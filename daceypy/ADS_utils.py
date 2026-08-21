@@ -67,7 +67,7 @@ def extract_ads_boxes_and_centers(
 
 def extract_all_taylor_maps(
     ADS_domains: Union[List[Any], List[List[Any]]],
-    order_DA: int,
+    DA_order: int,
 ) -> Union[List[Dict], List[List[Dict]]]:
     """
     Extract Taylor maps from all ADS domains independently of any points.
@@ -89,7 +89,7 @@ def extract_all_taylor_maps(
 
             taylor_maps_at_time.append(
                 {
-                    "Taylor_map": extract_map(patch.manifold, order_DA),
+                    "Taylor_map": extract_map(patch.manifold, DA_order),
                     "DA_map": patch.manifold,
                     "box": {
                         "origin": origin,
@@ -108,7 +108,7 @@ def assign_points_to_domains(
     points: np.ndarray,
     domain_matrix: np.ndarray,
     origin: np.ndarray,
-    DA_order: np.ndarray,
+    DA_order: int,
 ) -> Union[List[Dict], List[List[Dict]]]:
     """
     Assign physical points to the corresponding ADS sub-domains or patches.
@@ -121,14 +121,23 @@ def assign_points_to_domains(
     Parameters
     ----------
     ADS_domains : list or list of lists
-        The set of ADS domains (potentially over multiple time steps).
+        The set of ADS domains (potentially over multiple time steps). The
+        initial box must be affine (degree 1): ``ADS.split`` preserves that
+        through any sequence of splits, which is what keeps every patch an
+        axis-aligned box once rotated into ``domain_matrix``'s frame. A
+        higher-degree initial box would be linearized in silence by
+        ``_patch_axes_from_box``.
     points : ndarray, shape (n_points, ndim)
         Physical state vectors to be assigned to sub-domains.
     domain_matrix : ndarray, shape (ndim, ndim)
         The primary transformation matrix defining the global DA domain.
+        Must be the same matrix that generated ``ADS_domains``: the exact
+        membership test below relies on every patch remaining an affine
+        (degree-1) box in this frame, and silently degrades to an
+        approximate axis-aligned check if a different matrix is passed.
     origin : ndarray, shape (ndim,)
         The global center of the parent ADS domain.
-    DA_order : ndarray
+    DA_order : int
         The order of the Taylor expansions within the patches.
 
     Returns
@@ -139,6 +148,16 @@ def assign_points_to_domains(
         - geometry: Local Taylor maps, axes, and physical boundaries.
         - physical_points: Points assigned to this domain in state coordinates.
         - adimensional_points: Local coordinates in the range [-1, 1]^n.
+
+    Notes
+    -----
+    Every point is always assigned to *some* domain: a point that falls
+    outside every patch boundary is assigned to the nearest one instead
+    (nearest patch center, in the domains' rotated frame). There is
+    currently no way for the caller to tell, from the return value alone,
+    whether a given point was actually inside a patch or only assigned by
+    this fallback -- e.g. its ``adimensional_points`` may fall outside
+    ``[-1, 1]^n`` in that case.
     """
     points_array = np.asarray(points, dtype=np.float64)
     if points_array.ndim == 1:
@@ -172,13 +191,12 @@ def assign_points_to_domains(
         
         # Transform physical points to the normalized global DA space
         rotated_points = (inv_domain_matrix @ (points_array - origin).T).T
-        rotated_points_all = np.repeat(rotated_points[:, None, :], n_domains, axis=1)
 
         # Pre-compute rotated boundaries for efficient membership testing
         rotated_mins = np.empty((n_domains, ndim), dtype=float)
         rotated_maxs = np.empty((n_domains, ndim), dtype=float)
         rotated_centers = np.empty((n_domains, ndim), dtype=float)
- 
+
         for d in range(n_domains):
             rotated_corners = (inv_domain_matrix @ (physical_corners[d] - origin).T).T
             rotated_mins[d] = rotated_corners.min(axis=0)
@@ -186,16 +204,21 @@ def assign_points_to_domains(
             rotated_centers[d] = rotated_corners.mean(axis=0)
 
         # vectorized check: check if points fall within the rotated bounding box of each patch
+        # (broadcasts (n_points, 1, ndim) against (1, n_domains, ndim), no need to
+        # materialize the repeated (n_points, n_domains, ndim) array)
         inside_rotated_box = np.all(
-            (rotated_points_all >= (rotated_mins[np.newaxis, :, :] - membership_tol))
-            & (rotated_points_all <= (rotated_maxs[np.newaxis, :, :] + membership_tol)),
+            (rotated_points[:, np.newaxis, :] >= (rotated_mins[np.newaxis, :, :] - membership_tol))
+            & (rotated_points[:, np.newaxis, :] <= (rotated_maxs[np.newaxis, :, :] + membership_tol)),
             axis=2,
         )
 
-        # Spatial tree for handling points outside the explicitly defined domains.
+        # Spatial tree for handling points outside the explicitly defined domains,
+        # built on the same rotated frame used for the membership/disambiguation
+        # tests above (querying in physical space would use a different metric
+        # whenever domain_matrix is anisotropic).
         # Imported lazily: scipy is an optional dependency, needed only here.
         from scipy.spatial import KDTree
-        tree = KDTree(physical_origins)
+        tree = KDTree(rotated_centers)
 
         for i in range(n_points):
             candidates = np.where(inside_rotated_box[i])[0]
@@ -204,13 +227,17 @@ def assign_points_to_domains(
             elif candidates.size > 1:
                 # Disambiguate overlapping boundaries using distance to the patch center
                 distances = [
-                    np.linalg.norm(rotated_points_all[i, d] - rotated_centers[d])
+                    np.linalg.norm(rotated_points[i] - rotated_centers[d])
                     for d in candidates
                 ]
                 point_to_domain[i] = candidates[int(np.argmin(distances))]
             else:
-                # Assign to the nearest domain if no boundary is intersected
-                _, nearest = tree.query(points_array[i], workers=-1)
+                # Assign to the nearest domain if no boundary is intersected.
+                # Deliberate: this always returns a domain, even for a point
+                # arbitrarily far from every one of them -- there is no
+                # sentinel/warning for "unassigned" (see the Notes section
+                # of this function's docstring).
+                _, nearest = tree.query(rotated_points[i])
                 point_to_domain[i] = nearest
 
         # Compile assignment results with local adimensional coordinates
@@ -280,7 +307,7 @@ def prepare_visualization_data(
     # Convert points to numpy array and validate dimensions
     points_array: np.ndarray = np.asarray(points, dtype=np.float64)
     if points_array.ndim == 1:
-        points_array = points_array.reshape(-1, 1)
+        points_array = points_array.reshape(1, -1)
     
     n_points: int
     ndim: int
@@ -293,9 +320,13 @@ def prepare_visualization_data(
     # Compute bounding boxes for all domains
     domain_boxes: List[Dict] = []
     for patch in patches:
-        min_corner: np.ndarray = np.array(patch.box.eval([-1] * ndim)).reshape(ndim)
-        max_corner: np.ndarray = np.array(patch.box.eval([+1] * ndim)).reshape(ndim)
-        
+        # Use all 2**ndim corners, not just the (-1,...,-1)/(+1,...,+1)
+        # diagonal: for a rotated domain_matrix the axis-wise min/max of the
+        # box is not generally attained at those two corners alone.
+        corners = _patch_corners_from_box(patch)
+        min_corner: np.ndarray = corners.min(axis=0)
+        max_corner: np.ndarray = corners.max(axis=0)
+
         domain_boxes.append({
             "min": min_corner,
             "max": max_corner,
@@ -305,17 +336,29 @@ def prepare_visualization_data(
     
     # Build point-to-domain mapping
     point_to_domain: np.ndarray
-    
+
     if point_assignments is None:
         # Compute assignments if not provided
         point_to_domain = np.full(n_points, -1, dtype=np.int64)
-        
+
+        # Membership must be tested against each patch's own (possibly
+        # rotated) parallelepiped, not its axis-aligned bounding box: for a
+        # rotated domain_matrix the AABBs of neighboring patches overlap
+        # even where the true patches do not, which would misassign points
+        # in that overlap region.
+        membership_tol = 1e-10
+        patch_axes = [_patch_axes_from_box(patch) for patch in patches]
+        patch_origins = [
+            np.asarray(patch.box.eval([0] * ndim), dtype=float).ravel()
+            for patch in patches
+        ]
+
         for i, point in enumerate(points_array):
             is_inside: List[bool] = [
-                np.all((point >= box["min"]) & (point <= box["max"])) 
-                for box in domain_boxes
+                np.all(np.abs(np.linalg.solve(patch_axes[d], point - patch_origins[d])) <= 1.0 + membership_tol)
+                for d in range(n_domains)
             ]
-            
+
             if any(is_inside):
                 candidate_indices: np.ndarray = np.where(is_inside)[0]
                 distances: List[float] = [
@@ -536,30 +579,3 @@ def print_validation_report(
     print(f"All points assigned:              {'✓ Yes' if validation['all_assigned'] else '✗ No'}")
     print(f"Overall validation:               {'✓ PASS' if validation['is_valid'] else '✗ FAIL'}")
     print("="*70 + "\n")
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    print("ADS Point Assignment Utility Functions")
-    print("="*70)
-    print("\nAvailable functions:")
-    print("\n1. Core functions:")
-    print("   - extract_all_taylor_maps: Extract all Taylor maps independently")
-    print("   - assign_points_to_domains: Assign points and extract Taylor maps")
-    print("   - prepare_visualization_data: Prepare data for plotting/analysis")
-    print("\n2. Analysis functions:")
-    print("   - compute_assignment_statistics: Calculate assignment statistics")
-    print("   - print_assignment_statistics: Print formatted statistics")
-    print("   - validate_point_assignments: Validate assignments")
-    print("   - print_validation_report: Print validation report")
-    print("\n3. Usage patterns:")
-    print("\n   Pattern A: Assignment only (no visualization)")
-    print("   >>> assignments = assign_points_to_domains(domains, points, order_DA=2)")
-    print("\n   Pattern B: Assignment + visualization")
-    print("   >>> assignments = assign_points_to_domains(domains, points, order_DA=2)")
-    print("   >>> viz_data = prepare_visualization_data(domains, points, assignments)")
-    print("   >>> print_assignment_statistics(viz_data)")
-    print("\n   Pattern C: Visualization without pre-computed assignments")
-    print("   >>> viz_data = prepare_visualization_data(domains, points)")
-    print("   >>> print_assignment_statistics(viz_data)")
-    print("="*70)

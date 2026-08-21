@@ -387,20 +387,17 @@ def compute_expansion_errors(
     for assignment in assignments_opt:
         # OPTIMIZED assignment
         for adimensional_point, index in zip(
-            assignment["adimensional_points"], assignment["indices"]  # Fix 1: was `assignment` (iterates dict keys)
+            assignment["adimensional_points"], assignment["indices"]
         ):
             sample_finals_opt[index] = assignment["geometry"]["DA_map"].eval(adimensional_point)
-        # Fix 2: removed erroneous `break` that aborted after the first assignment
 
     for assignment in assignments_std:
         # STANDARD assignment
         for adimensional_point, index in zip(
-            assignment["adimensional_points"], assignment["indices"]  # Fix 1 (same)
+            assignment["adimensional_points"], assignment["indices"]
         ):
             sample_finals_std[index] = assignment["geometry"]["DA_map"].eval(adimensional_point)
-        # Fix 2: removed erroneous `break` (same)
 
-    # Fix 3: added loop over evaluated points — `expansion_opt/std` were undefined before
     for expansion_opt, expansion_std in zip(sample_finals_opt, sample_finals_std):
         error_pos = (
             np.linalg.norm(expansion_opt[0:3] - expansion_std[0:3])
@@ -415,7 +412,7 @@ def compute_expansion_errors(
         error_tot_pos.append(error_pos)
         error_tot_vel.append(error_vel)
 
-    return np.array(error_tot_pos), np.array(error_tot_vel)  # Fix 4: missing return
+    return np.array(error_tot_pos), np.array(error_tot_vel)
     
 
 
@@ -661,7 +658,7 @@ def main():
     )
     plot_ADS_boxes_2D(
         boxes_opt,
-        title_prefix=" standard domain evolution",
+        title_prefix=" optimized domain evolution",
         save=False,
         x0=vect_0,
         basis_matrix=domain_matrix,
@@ -710,11 +707,11 @@ def main():
     print("=" * 70)
     
     print("\nExtracting Taylor maps - OPTIMIZED...")
-    taylor_maps_opt = ADS_utils.extract_all_taylor_maps(final_states_opt, order_DA=n_order_DA)
+    taylor_maps_opt = ADS_utils.extract_all_taylor_maps(final_states_opt, DA_order=n_order_DA)
     print(f"✓ OPTIMIZED - Extracted {len(taylor_maps_opt)} Taylor maps")
     
     print("\nExtracting Taylor maps - STANDARD...")
-    taylor_maps_std = ADS_utils.extract_all_taylor_maps(final_states_std, order_DA=n_order_DA)
+    taylor_maps_std = ADS_utils.extract_all_taylor_maps(final_states_std, DA_order=n_order_DA)
     print(f"✓ STANDARD - Extracted {len(taylor_maps_std)} Taylor maps")
 
     print("\n" + "=" * 70)

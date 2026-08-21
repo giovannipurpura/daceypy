@@ -715,11 +715,20 @@ class integrator_optimized(integrator):
 
         self._set_final_outputs()
 
-        if np.any(np.abs(states[-1].cons() - self._runningX.cons()) > time_tol):
-            len_states = len(states)
-            if self._input.t > t_eval[len_states - 1]:
+        # If the loop exited mid-step (e.g. a subclass event such as an ADS
+        # split truncation-error breach), self._runningX may sit off-grid,
+        # past the last point recorded in states. Record that off-grid state
+        # too, so callers that rely on the exact current state at exit (not
+        # just the last requested grid point) can see it.
+        last_cons = states[-1].cons() if isinstance(states[-1], daceypy.array) else states[-1]
+        running_cons = self._runningX.cons() if isinstance(self._runningX, daceypy.array) else self._runningX
+        if np.any(np.abs(last_cons - running_cons) > time_tol):
+            last_recorded_t = t_eval[t_eval_index - 1]
+            overshot = (self._input.t > last_recorded_t) if forward else (self._input.t < last_recorded_t)
+            undershot = (self._input.t < last_recorded_t) if forward else (self._input.t > last_recorded_t)
+            if overshot:
                 states.append(self._runningX.copy())
-            elif self._input.t < t_eval[len_states - 1]:
+            elif undershot:
                 states = states[:-1]
                 if not np.any(np.abs(t_eval - self._input.t) < time_tol):
                     states.append(self._runningX.copy())
