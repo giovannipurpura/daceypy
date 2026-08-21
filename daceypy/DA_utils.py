@@ -1,10 +1,14 @@
 from __future__ import annotations
-from typing import List, Dict
+
+from typing import Dict, List, Optional, Union
 from itertools import permutations
 from math import factorial
 from collections import Counter
+
 import numpy as np
 from numpy.typing import NDArray
+
+import daceypy
 
 
 def fill_symmetric_tensor(
@@ -35,27 +39,47 @@ def fill_symmetric_tensor(
         tensor[perm] = value
 
 
+def _is_da_vector(obj) -> bool:
+    """Return True if obj is a non-empty sequence of DA polynomials."""
+    try:
+        return hasattr(obj, '__len__') and len(obj) > 0 and isinstance(obj[0], daceypy.DA)
+    except (TypeError, KeyError):
+        return False
+
+
+def _is_list_of_da_vectors(obj) -> bool:
+    """Return True if obj is a non-empty list/tuple of DA state vectors."""
+    try:
+        return isinstance(obj, (list, tuple)) and len(obj) > 0 and _is_da_vector(obj[0])
+    except (TypeError, KeyError):
+        return False
+
+
 def extract_map(
-    sol: List,
-    max_order: int
-) -> List[Dict[str, NDArray[np.float64]]]:
+    sol,
+    max_order: Optional[int] = None
+) -> Union[Dict[str, NDArray[np.float64]], List[Dict[str, NDArray[np.float64]]]]:
     """
     Extract Taylor expansion terms (0th, 1st, 2nd, ...) from a DA state transition map.
 
     Parameters
     ----------
-    sol : list
-        A list of DA state vectors (e.g., output of a DA ODE propagator),
-        one entry per time instant. Each sol[j][i] is a DA polynomial
-        representing the i-th state component.
-    max_order : int
+    sol : DA array or list of DA arrays
+        - If DA array: Single DA state vector
+        - If list of DA arrays: List of DA state vectors (one per time instant)
+        Each sol[i] (or sol[j][i]) is a DA polynomial representing the i-th state component.
+    max_order : int, optional
         Maximum Taylor expansion order to extract (≥ 0).
+        If None (default), all available orders are extracted automatically
+        by inspecting the DA polynomials' monomial structure.
 
     Returns
     -------
-    list[dict[str, NDArray[np.float64]]]
-        A list of dictionaries, one per time instant.
-        Keys follow the naming convention:
+    dict or list[dict]
+        - If single DA array: Single dictionary of Taylor terms
+        - If list of DA arrays: List of dictionaries (one per time instant)
+
+        Each dictionary has keys following the naming convention:
             "Taylor_order_0" → constant term (state at nominal IC)
             "Taylor_order_1" → Jacobian (STM)
             "Taylor_order_2" → Hessian tensor
@@ -69,24 +93,43 @@ def extract_map(
     Raises
     ------
     ValueError
-        If `max_order` is not a non-negative integer.
+        If `max_order` is provided but is not a non-negative integer.
+    TypeError
+        If `sol` is not a DA array or list of DA arrays.
 
     Notes
     -----
     This function converts DA polynomial representations into structured
     NumPy tensors suitable for sensitivity analysis, uncertainty propagation,
     or higher-order control and estimation.
+    When `max_order` is None, the maximum order is inferred from the highest-degree
+    monomial found across all state components of the first time instant.
     """
-    if not isinstance(max_order, int) or max_order < 0:
+    if max_order is not None and (not isinstance(max_order, int) or max_order < 0):
         raise ValueError(f"'max_order' must be an integer ≥ 0, got {max_order!r}")
 
-    n_instants = len(sol)
-    n_state = len(sol[0])
+    if _is_da_vector(sol) and not _is_list_of_da_vectors(sol):
+        sol_list = [sol]
+        return_single = True
+    elif _is_list_of_da_vectors(sol):
+        sol_list = list(sol)
+        return_single = False
+    else:
+        raise TypeError(
+            "Input 'sol' must be a DA state vector or a list/tuple of DA state vectors.\n"
+            f"  Expected: iterable of DA polynomials, or list thereof.\n"
+            f"  Got:      {type(sol).__name__!r}"
+            + (f" with first element of type {type(sol[0]).__name__!r}"
+               if hasattr(sol, '__len__') and len(sol) > 0 else "")
+        )
+
+    if max_order is None:
+        max_order = _infer_max_order(sol_list[-1])
 
     expansion = []
 
-    for j in range(n_instants):
-        sol_j = sol[j]
+    for sol_j in sol_list:
+        n_state = len(sol_j)
         taylor_terms = {}
 
         # Pre-allocate tensors for each Taylor order
@@ -104,8 +147,8 @@ def extract_map(
             for k in range(n_monomials):
                 monomial = sol_j[i].getMonomial(k)
                 m_jj = np.array(monomial.m_jj, dtype=int)
-
                 order = int(np.sum(m_jj))
+
                 if order == 0 or order > max_order:
                     continue
 
@@ -116,7 +159,9 @@ def extract_map(
 
                 # Correct for repeated permutations (multinomial symmetry)
                 counts = Counter(multi_idx)
-                denom = factorial(len(multi_idx)) / np.prod([factorial(v) for v in counts.values()])
+                denom = factorial(len(multi_idx)) / np.prod(
+                    [factorial(v) for v in counts.values()]
+                )
                 adjusted_coeff = coeff / denom
 
                 fill_symmetric_tensor(
@@ -127,4 +172,101 @@ def extract_map(
 
         expansion.append(taylor_terms)
 
-    return expansion
+    return expansion[0] if return_single else expansion
+
+
+def _infer_max_order(sol_j) -> int:
+    """Infer the maximum monomial order present in a DA state vector."""
+    max_ord = 0
+    for i in range(len(sol_j)):
+        n_monomials = sol_j[i].m_index.len + 1
+        for k in range(n_monomials):
+            monomial = sol_j[i].getMonomial(k)
+            order = int(np.sum(np.array(monomial.m_jj, dtype=int)))
+            if order > max_ord:
+                max_ord = order
+    return max_ord
+
+
+def assign_taylor_to_da(
+    taylor_maps: Union[Dict[str, np.ndarray], List[Dict[str, np.ndarray]]],
+    da_vars,
+):
+    """
+    Write the Taylor tensor values back into the monomial coefficients of
+    `da_vars`, in place. This mirrors `extract_map`'s monomial walk exactly,
+    but assigns `monomial.m_coeff.value` instead of reading it — no new
+    monomials are created and no algebra (multiplication of da_vars) is
+    performed; only existing coefficients are overwritten.
+
+    Parameters
+    ----------
+    taylor_maps : dict or list[dict]
+        Output of `extract_map`.
+    da_vars : DA state vector or list of DA state vectors
+        The DA object(s) whose monomial coefficients will be overwritten.
+        Must already have the same monomial support (order, variables) as
+        the `sol` originally passed to `extract_map` — typically you pass
+        `sol` itself (or a copy of it) here.
+
+    Returns
+    -------
+    The same `da_vars` object(s), mutated in place.
+    """
+    is_list = isinstance(taylor_maps, list)
+    maps_list = taylor_maps if is_list else [taylor_maps]
+
+    if is_list:
+        if not _is_list_of_da_vectors(da_vars) or len(da_vars) != len(maps_list):
+            raise ValueError(
+                "'da_vars' must be a list of DA vectors matching the length "
+                "of 'taylor_maps' when the latter is a list."
+            )
+        da_vars_list = da_vars
+    else:
+        da_vars_list = [da_vars]
+
+    for tm, sol_j in zip(maps_list, da_vars_list):
+        _assign_single(tm, sol_j)
+
+    return da_vars if is_list else da_vars_list[0]
+
+
+def _assign_single(taylor_terms: Dict[str, np.ndarray], sol_j) -> None:
+    """Overwrite monomial coefficients of a single DA vector `sol_j` in place."""
+    max_order = max(
+        int(k.rsplit("_", 1)[-1])
+        for k in taylor_terms
+        if k.startswith("Taylor_order_")
+    )
+    n_state = len(sol_j)
+
+    for i in range(n_state):
+        n_monomials = sol_j[i].m_index.len + 1
+
+        for k in range(n_monomials):
+            monomial = sol_j[i].getMonomial(k)
+            m_jj = np.array(monomial.m_jj, dtype=int)
+            order = int(np.sum(m_jj))
+
+            if order > max_order:
+                continue
+
+            if order == 0:
+                new_coeff = float(taylor_terms["Taylor_order_0"][i])
+            else:
+                multi_idx = tuple(
+                    idx for idx, exp in enumerate(m_jj) for _ in range(exp)
+                )
+                T = taylor_terms[f"Taylor_order_{order}"][i]
+                adjusted_coeff = float(T[multi_idx])
+
+                # Undo the multinomial normalization applied in extract_map
+                counts = Counter(multi_idx)
+                multiplicity = factorial(order) / np.prod(
+                    [factorial(c) for c in counts.values()]
+                )
+                new_coeff = adjusted_coeff * multiplicity
+
+            # Only the coefficient changes — exponents/structure untouched.
+            monomial.m_coeff.value = new_coeff

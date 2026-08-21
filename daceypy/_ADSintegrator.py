@@ -25,7 +25,7 @@ import daceypy
 
 from .RK import RKCoeff, RK78
 
-from ._integrator import integrator
+from ._integrator import integrator, integrator_optimized
 
 from ._PrettyType import PrettyType
 
@@ -313,6 +313,7 @@ class ADSintegrator(integrator, metaclass=PrettyType):
 
         return listIn, listOut
 
+
     def _importfromList(self, ListIn: List[ADSstate]) -> None:
         """
         Remove from the list of ADS elements that need propagation the 
@@ -401,3 +402,313 @@ class ADSintegrator(integrator, metaclass=PrettyType):
         print("Propagation completed. ")
 
         return listOut
+
+    
+
+class ADSintegrator_optimized(integrator_optimized, metaclass=PrettyType):
+    """
+    ADS integrator to perform splits online during propagation.
+    """
+    def __init__(self, RKcoeff: RKCoeff = RK78()) -> None:
+        """
+        Initialize an instance of the custom propagator capable of 
+        dealing with online ADS.
+
+        Args:
+            RKcoeff:
+              instance of the class RKCoeff that stores the coefficients
+              of the Numerical Propagation Scheme
+
+        See also:
+            integrator
+            RK.RKCoeff
+        """
+
+        # call to parent class constructor:
+        # ADS is only available for daceypy.array type
+        super(ADSintegrator_optimized, self).__init__(RKcoeff, daceypy.array)
+
+        self._nSplitMax: int = 0
+        "Maximum number of split for the ADS routine"
+
+        self._errtol: Optional[Union[float, NDArray[np.double]]] = None
+        "maximum truncation tolerance to determine split condition"
+        
+        self._stack: Optional[ADSstate] = None
+        "ADS patch at the top of the stack with enhanced info"
+
+    def _InitializeList(
+        self,
+        set: List[ADS],
+        splitTimesList: Optional[List[List[float]]] = None,
+    ) -> List[ADSstate]:
+        """
+        Initializes the list of ADS objects that need propagation as
+        instances of ADSstate required by this custom propagator.
+
+        Args:
+            set: initial list of ADS objects.
+            splitTimesList:
+              optional list of split times of each element of set. 
+              This is only required if one wants to propagate a domain
+              that was already split while preserving its history.
+
+        Returns:
+            List of ADSstate instances ready for online ADS propagation
+
+        Raises:
+            ValueError
+        """
+
+        return ADSintegrator._InitializeList(self, set, splitTimesList)
+    
+    def _CallBack_CheckEvent(self) -> bool:
+        """
+        Check if integration should stop according to an event function
+        (default is False). This version overloads that of integrator.
+
+        Returns:
+            True if the integration needs to be stopped
+
+        See also:
+            integrator._CallBack_CheckEvent
+        """
+        return ADSintegrator._CallBack_CheckEvent(self)
+    
+    def _SplitStateProcess_optimized(
+        self,
+        xf: daceypy.array,
+        listIn: List[ADSstate],
+        t_vect: np.ndarray,
+    ) -> Tuple[List[ADSstate], List[ADSstate]]:
+        """
+        Updates the list of ADS objects that need propagation online.
+        
+        Args:
+            xf: current state of the propagation.
+            listIn: list of ADSstates that still need to be propagated.
+            listOut: list of ADSstates that reached tf.
+            
+        Returns:
+            List of ADSstate instances that still need propagation
+            List of ADSstate instances that reached tf
+            
+        See also:
+            ADS
+        """
+        # Initialize output list for ADSstates that completed propagation
+        listOut = []
+        
+        # Check if propagation stopped before reaching final time
+        # (indicates split event was triggered)
+        if not self._reachstime:
+            # Process intermediate propagation states if they exist
+            if len(t_vect) > 0:
+                # Store all intermediate states (all except the last one)
+                # These represent the propagation trajectory before the split
+                for i in range(len(xf) - 1):
+                    # Create ADSstate for each intermediate point
+                    tempD = ADSstate(
+                        ADS(
+                            self._stack.ADSPatch.box,  # Bounding box of the domain
+                            self._stack.ADSPatch.nsplit,  # Split order parameter
+                            xf[i],  # State at this time step
+                        ),
+                        t_vect[i],  # Time corresponding to this state
+                        None,  # No step size (intermediate state)
+                        self._stack.checkBreached,  # Accuracy breach check function
+                        splitTimes=self._stack.splitTimes.copy(),  # History of split times
+                    )
+                    # Preserve breach time information from stack
+                    tempD._breachTime = self._stack._breachTime
+                    # Add to output list (completed states)
+                    listOut.append(tempD)
+                
+            # Create ADS object from the final state where split occurs
+            stateIn = ADS(
+                self._stack.ADSPatch.box,
+                self._stack.ADSPatch.nsplit,
+                xf[-1],  # Last propagated state before split
+            )
+            
+            print(
+                "The domain was split at instant ",
+                self._input.t,
+                " and continued the propagation..."
+            )
+            
+            # Determine optimal split direction based on domain expansion
+            dir = stateIn.direction()
+            # Split the domain into left and right subdomains
+            Dl, Dr = stateIn.split(dir)
+            
+            # Update split times history by adding current split time
+            tempSplitTimes = self._stack.splitTimes.copy()
+            tempSplitTimes.append(self._input.t)
+            
+            # Create ADSstate for left subdomain
+            tempL = ADSstate(
+                Dl,  # Left subdomain
+                self._input.t,  # Current time (split time)
+                self._input.h,  # Time step for next propagation
+                splitTimes=tempSplitTimes,  # Updated split history
+            )
+            
+            # Create ADSstate for right subdomain
+            tempR = ADSstate(
+                Dr,  # Right subdomain
+                self._input.t,  # Current time (split time)
+                self._input.h,  # Time step for next propagation
+                splitTimes=tempSplitTimes,  # Updated split history
+            )
+            
+            # Place right subdomain on stack for immediate processing
+            self._stack = tempR
+            # Add left subdomain to queue for later propagation
+            listIn.append(tempL)
+        else:
+            # Propagation reached final time tf successfully
+            # Store all final states (no split needed)
+            for i in range(len(xf)):
+                # Create ADSstate for each final state
+                tempD = ADSstate(
+                    ADS(
+                        self._stack.ADSPatch.box,
+                        self._stack.ADSPatch.nsplit,
+                        xf[i],  # Final propagated state
+                    ),
+                    t_vect[i],  # Corresponding time
+                    None,  # No further propagation needed
+                    self._stack.checkBreached,
+                    splitTimes=self._stack.splitTimes.copy(),
+                )
+                # Preserve breach time information
+                tempD._breachTime = self._stack._breachTime
+                # Add to output list (completed propagation)
+                listOut.append(tempD)
+            pass
+        
+        # Return updated lists:
+        # - listIn: domains that still need propagation (including new splits)
+        # - listOut: domains that completed propagation to tf
+        return listIn, listOut
+
+    def _importfromList(self, ListIn: List[ADSstate]) -> None:
+        """
+        Remove from the list of ADS elements that need propagation the 
+        one at the top of the stack and prepare it for propagation.
+
+        Args:
+            listIn: list of ADSstates that still need to be propagated.
+            
+        See also:
+            integrator
+        """
+        ADSintegrator._importfromList(self, ListIn)
+
+    def loadADSopt(
+        self,
+        tol: Union[float, NDArray[np.double]] = 1e-4,
+        nsplit: int = 15,
+    ) -> None:
+        """
+        Load ADS options.
+
+        Args:
+            tol: maximum truncation error tolerance.
+            nsplit: maximum number of splits per each domain.
+        """
+        ADSintegrator.loadADSopt(self, tol, nsplit)
+
+    def propagate(
+        self,
+        set: List[ADS],
+        t_vect: np.ndarray,
+        splitTimesList: List[List[float]] = None,
+    ) -> List[List[ADSstate]]:
+        """
+        Propagates the initial list of ADS objects while dealing with 
+        online ADS. Overloads parent class method integrator.propagate.
+        
+        Args:
+            set: List of ADS elements that need propagation.
+            t_vect: Array of time points at which to output propagated states.
+            splitTimesList: Optional list of split times for each element of set. 
+                Required only when propagating a domain that was already split 
+                while preserving its history.
+        
+        Returns:
+            List of lists of ADSstate instances, one list per time point in t_vect.
+        
+        See also:
+            integrator.propagate
+        
+        Note:
+            The initial time of the propagation MUST be set through 
+            integrator.loadTime and will be adapted online by each patch. 
+            The final time tf is fixed and MUST be set through integrator.loadTime.
+        """  
+        # Create initial processing queue from input domains
+        listIn = self._InitializeList(set, splitTimesList)
+        
+        print("Let's start propagation...")
+        
+        # Initialize output structure: one list of states per time point
+        listOut_tot: List[List[ADSstate]] = [[] for _ in range(len(t_vect))]
+        
+        # Process all domains in the queue
+        while listIn:
+            # Extract and load the next domain from the queue
+            self._importfromList(listIn)
+            last_t = self._input.t
+            
+            # Propagate the current domain until final time is reached
+            while not self._reachstime:
+                # Construct time vector: current time + all future requested times
+                t_vect_in = np.concatenate(
+                    ([self._input.t], t_vect[t_vect > self._input.t])
+                )
+                
+                # Perform numerical integration step
+                xf = super(ADSintegrator_optimized, self).propagate(
+                    self._stack.ADSPatch.manifold, 
+                    t_vect_in
+                )
+
+                # Remove intermediate state if current time was not in original t_vect
+                if t_vect_in[0] not in t_vect and len(xf) > 1:
+                    xf = xf[1:]
+
+                # Identify time points covered in this propagation step
+                mask_prop = (t_vect <= self._input.t) & (t_vect >= last_t)
+                indices_prop = np.where(mask_prop)[0]
+                t_vect_prop = t_vect[indices_prop]
+                
+                # Handle domain splitting and update processing queues
+                listIn, listOut = self._SplitStateProcess_optimized(
+                    xf, listIn, t_vect_prop
+                )
+                
+                # Store output states at their corresponding time indices
+                if len(listOut) > 0 and len(indices_prop) > 0:
+                    # Determine which time indices to store based on propagation status
+                    if not self._reachstime and len(t_vect_prop) > 0:
+                        # Mid-propagation: exclude final state if it matches current time
+                        # (will be reprocessed in next iteration for accuracy)
+                        if t_vect_prop[-1] == self._input.t:
+                            indices_to_use = indices_prop[:-1]
+                        else:
+                            indices_to_use = indices_prop
+                    else:
+                        # Final time reached: include all states
+                        indices_to_use = indices_prop
+                    
+                    # Append computed states to output structure
+                    for i, idx in enumerate(indices_to_use):
+                        listOut_tot[idx].append(listOut[i])
+                
+                # Update time tracker for next iteration
+                last_t = self._input.t
+        
+        print("Propagation completed.")
+        return listOut_tot
