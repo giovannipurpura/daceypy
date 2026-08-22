@@ -184,7 +184,13 @@ class integrator(metaclass=PrettyType):
         Returns:
             True if the integration should stop.
         """
-        self._reachstime = (abs(1.0 - self._input.t / self._tf) <= 2.2e-16)
+        # The last step only lands within one ulp of ``_tf``, so the tolerance
+        # must stay anchored to a scale of at least ``abs(_tf)`` or the loop
+        # would never terminate. This scale keeps that guarantee and stays
+        # defined at ``_tf == 0``, where the previous purely relative test
+        # ``abs(1 - t / _tf)`` divided by zero.
+        scale = max(abs(self._t0), abs(self._tf))
+        self._reachstime = abs(self._tf - self._input.t) <= 2.2e-16 * scale
         return self._reachstime
 
     def _Initialize(
@@ -280,7 +286,7 @@ class integrator(metaclass=PrettyType):
             self._input.h=4.0
         else:
             self._input.h *= min(4.0, max(0.1, 0.9 * pow(1.0 / self._err, 1.0 / (self._RKcoeff.RK_order + 1.0))))
-        
+
 
         if abs(self._input.h) <= self._input.minh * 1.2:
             self._input.h /= 3.0
@@ -484,7 +490,7 @@ def _getepstolDA(self, pn: daceypy.array) -> NDArray[np.double]:
 
 def PicardLindelof(
     x: Union[daceypy.array, NDArray[np.double]],
-    direction: int, 
+    direction: int,
     tf: float,
     f: Callable[[daceypy.array, Union[daceypy.DA, float]], daceypy.array],
 ) -> daceypy.array:
