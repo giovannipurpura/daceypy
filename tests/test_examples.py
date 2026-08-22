@@ -14,6 +14,7 @@ Markers:
 
 from __future__ import annotations
 
+import ast
 import os
 import subprocess
 import sys
@@ -76,4 +77,33 @@ def test_example_runs(rel: str):
         f"{rel} exited with {result.returncode}\n"
         f"--- stdout (tail) ---\n{result.stdout[-2000:]}\n"
         f"--- stderr (tail) ---\n{result.stderr[-2000:]}"
+    )
+
+
+@pytest.mark.parametrize("rel", _examples())
+def test_example_text_is_ascii(rel: str):
+    """No example may print characters the console cannot encode.
+
+    On Windows ``sys.stdout`` defaults to the legacy code page, so a single
+    arrow or Greek letter in a printed string aborts the script with
+    ``UnicodeEncodeError`` -- for the user running the example, not just for
+    this suite. Checking the string literals catches that on every platform,
+    including for the examples that are too slow to run in the CI matrix.
+
+    Comments and identifiers are exempt: they are decoded from the source as
+    UTF-8 and never reach the console.
+    """
+    source = (REPO_ROOT / rel).read_text(encoding="utf-8")
+    offenders = sorted(
+        {
+            char
+            for node in ast.walk(ast.parse(source, filename=rel))
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            for char in node.value
+            if ord(char) > 127
+        }
+    )
+    assert not offenders, (
+        f"{rel} has non-ASCII characters in string literals: "
+        + ", ".join(f"{c!r} (U+{ord(c):04X})" for c in offenders)
     )

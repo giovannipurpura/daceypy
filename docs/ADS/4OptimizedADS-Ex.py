@@ -519,12 +519,12 @@ def main():
     Nmax = 30
 
     print("=" * 70)
-    print("CR3BP – ADS PROPAGATION COMPARISON")
+    print("CR3BP - ADS PROPAGATION COMPARISON")
     print("=" * 70)
     print(f"mu = {mu}")
     print(f"Initial state: [{x0}, {y0}, {z0}, {vx0}, {vy0}, {vz0}]")
     print("Uncertainty: position ~1e-6, velocity ~1e-7")
-    print(f"Time span: {T0} → {TF}")
+    print(f"Time span: {T0} -> {TF}")
     print("=" * 70)
 
     # ======================================================================
@@ -544,8 +544,8 @@ def main():
 
     n_domains_std = len(listOut_std)
 
-    print(f"✓ STANDARD - Time: {t_elapsed_std:.3f} s")
-    print(f"✓ STANDARD - Final domains: {n_domains_std}")
+    print(f"[ok] STANDARD - Time: {t_elapsed_std:.3f} s")
+    print(f"[ok] STANDARD - Final domains: {n_domains_std}")
 
     # ======================================================================
     # 4. OPTIMIZED ADS PROPAGATION
@@ -564,16 +564,16 @@ def main():
 
     n_domains_opt = len(listOut_opt[-1])
 
-    print(f"✓ OPTIMIZED - Time: {t_elapsed_opt:.3f} s")
-    print(f"✓ OPTIMIZED - Final domains: {n_domains_opt}")
-    print(f"✓ Speedup: {t_elapsed_std / t_elapsed_opt:.2f}x")
+    print(f"[ok] OPTIMIZED - Time: {t_elapsed_opt:.3f} s")
+    print(f"[ok] OPTIMIZED - Final domains: {n_domains_opt}")
+    print(f"[ok] Speedup: {t_elapsed_std / t_elapsed_opt:.2f}x")
 
     # ======================================================================
     # 5. DOMAIN EVOLUTION (OPTIMIZED)
     # ======================================================================
     print("\nOPTIMIZED - Domain evolution:")
     for t, states in zip(t_eval, listOut_opt):
-        print(f"  t = {t:6.3f} → {len(states):4d} domains")
+        print(f"  t = {t:6.3f} -> {len(states):4d} domains")
 
     plot_domain_evolution(listOut_opt, t_eval)
 
@@ -706,11 +706,11 @@ def main():
 
     print("\nExtracting Taylor maps - OPTIMIZED...")
     taylor_maps_opt = ADS_utils.extract_all_taylor_maps(final_states_opt, DA_order=n_order_DA)
-    print(f"✓ OPTIMIZED - Extracted {len(taylor_maps_opt)} Taylor maps")
+    print(f"[ok] OPTIMIZED - Extracted {len(taylor_maps_opt)} Taylor maps")
 
     print("\nExtracting Taylor maps - STANDARD...")
     taylor_maps_std = ADS_utils.extract_all_taylor_maps(final_states_std, DA_order=n_order_DA)
-    print(f"✓ STANDARD - Extracted {len(taylor_maps_std)} Taylor maps")
+    print(f"[ok] STANDARD - Extracted {len(taylor_maps_std)} Taylor maps")
 
     print("\n" + "=" * 70)
     print("ANALYSIS COMPLETE")

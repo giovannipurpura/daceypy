@@ -293,7 +293,7 @@ def main():
     # -------------------------------------------------------------------------
     # Test 4: Optimized DA_direct integrator, saving every integration step
     # -------------------------------------------------------------------------
-    print("\n=== TEST 4: OPTIMIZED TBP_INTEGRATOR (DA_direct) — all integrator steps ===")
+    print("\n=== TEST 4: OPTIMIZED TBP_INTEGRATOR (DA_direct) - all integrator steps ===")
     propagator_direct_all = build_optimized_propagator(t0, tf, "DA_direct")
 
     start_opt = time.perf_counter()
@@ -336,10 +336,10 @@ def main():
     print("\nZeroth-order term (nominal final state):")
     print(maps[-1]["Taylor_order_0"])
 
-    print("\nFirst-order term (State Transition Matrix — STM):")
+    print("\nFirst-order term (State Transition Matrix - STM):")
     print(maps[-1]["Taylor_order_1"])
 
-    print("\nSecond-order term (Hessian — nonlinear sensitivities):")
+    print("\nSecond-order term (Hessian - nonlinear sensitivities):")
     print(maps[-1]["Taylor_order_2"])
 
     # Perturb one STM entry in the extracted tensor, then assign the modified
@@ -367,7 +367,7 @@ def main():
     Deltax0 = np.array([1.0, -1.0, 0, 0, 0, 0])
     xf_displaced = xf_direct[-1].eval(Deltax0)
 
-    print(f"\n=== TEST 7: DA map evaluation with Δx0 = {Deltax0} ===")
+    print(f"\n=== TEST 7: DA map evaluation with Deltax0 = {Deltax0} ===")
     print(f"  Position: {xf_displaced[0]:.6f} km")
     print(f"  Velocity: {xf_displaced[3]:.6f} km/s")
 
