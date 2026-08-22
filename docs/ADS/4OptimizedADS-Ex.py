@@ -1,9 +1,7 @@
-from inspect import getsourcefile
 from typing import List, Dict, Tuple
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
-from numpy.typing import NDArray
 from daceypy import ADS, DA, array, RK
 from daceypy import ADSintegrator, ADSintegrator_optimized
 from daceypy import ADS_utils
@@ -18,37 +16,37 @@ from matplotlib.collections import LineCollection
 def CR3BP(x: array, t: float, mu: float) -> array:
     """
     Circular Restricted Three Body Problem dynamics in normalized coordinates.
-    
+
     Args:
         x: State vector [x, y, z, vx, vy, vz]
         t: Time (unused in autonomous system)
         mu: Mass parameter (Earth-Moon: ~0.01215)
-    
+
     Returns:
         State derivative [vx, vy, vz, ax, ay, az]
     """
     # Extract position and velocity
     pos: array = x[:3]
     vel: array = x[3:]
-    
+
     x_pos, y_pos, z_pos = pos[0], pos[1], pos[2]
-    
+
     # Distances from the two primaries
     r1 = ((x_pos + mu)**2 + y_pos**2 + z_pos**2)**0.5
     r2 = ((x_pos - 1 + mu)**2 + y_pos**2 + z_pos**2)**0.5
-    
+
     # Pseudo-potential gradient
     Omega_x = x_pos - (1 - mu) * (x_pos + mu) / r1**3 - mu * (x_pos - 1 + mu) / r2**3
     Omega_y = y_pos - (1 - mu) * y_pos / r1**3 - mu * y_pos / r2**3
     Omega_z = -(1 - mu) * z_pos / r1**3 - mu * z_pos / r2**3
-    
+
     # Accelerations (Coriolis + centrifugal + gravitational)
     ax = 2 * vel[1] + Omega_x
     ay = -2 * vel[0] + Omega_y
     az = Omega_z
-    
+
     acc = array([ax, ay, az])
-    
+
     # State derivative
     dx = vel.concat(acc)
     return dx
@@ -61,7 +59,7 @@ class AutomaticADS_CR3BP_integrator_optimized(ADSintegrator_optimized):
     def __init__(self, mu: float, RK: RK.RKCoeff = RK.RK78()):
         super(AutomaticADS_CR3BP_integrator_optimized, self).__init__(RK)
         self.mu = mu
-    
+
     def f(self, x, t):
         return CR3BP(x, t, self.mu)
 
@@ -73,7 +71,7 @@ class AutomaticADS_CR3BP_integrator(ADSintegrator):
     def __init__(self, mu: float, RK: RK.RKCoeff = RK.RK78()):
         super(AutomaticADS_CR3BP_integrator, self).__init__(RK)
         self.mu = mu
-    
+
     def f(self, x, t):
         return CR3BP(x, t, self.mu)
 
@@ -143,12 +141,12 @@ def _get_box_corners(box):
                 corners.append(np.where(mask, max_v, min_v))
             return np.asarray(corners, dtype=float)
     raise KeyError("Could not extract corners from the provided box.")
- 
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Public function
 # ─────────────────────────────────────────────────────────────────────────────
- 
+
 def plot_ADS_boxes_2D(
     domain_boxes,
     points=None,
@@ -209,7 +207,7 @@ def plot_ADS_boxes_2D(
         pts_rot = _local_coordinates(pts, x0, rotation=R, basis_matrix=basis_matrix)
     else:
         pts_rot = None
- 
+
     if ndim < 2:
         raise ValueError("ndim must be at least 2.")
 
@@ -349,17 +347,17 @@ def plot_domain_evolution(listOut_opt: List[List[ADSstate]], t_eval: np.ndarray)
     """
     fig = plt.figure(figsize=(10, 6))
     ax = plt.gca()
-    
+
     # Number of domains over time
     n_domains_opt = [len(states) for states in listOut_opt]
-    
+
     ax.plot(t_eval, n_domains_opt, 'b-o', linewidth=2, markersize=8, label='Optimized - Number of Domains')
     ax.set_xlabel('Time (normalized)', fontsize=12)
     ax.set_ylabel('Number of Domains', fontsize=12)
     ax.set_title('Domain Evolution Over Time - OPTIMIZED', fontsize=14, fontweight='bold')
     ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3)
-    
+
     plt.tight_layout()
     plt.savefig('cr3bp_domain_evolution_optimized.png', dpi=300, bbox_inches='tight')
 
@@ -413,58 +411,58 @@ def compute_expansion_errors(
         error_tot_vel.append(error_vel)
 
     return np.array(error_tot_pos), np.array(error_tot_vel)
-    
+
 
 
 def compute_cumulative_distribution(errors: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Compute cumulative distribution function (CDF) of errors.
-    
+
     Args:
         errors: Array of errors
-    
+
     Returns:
         sorted_errors: Errors sorted in ascending order
         cumulative_percentage: Percentage of points below each error threshold
     """
     # Sort errors in ascending order
     sorted_errors = np.sort(errors)
-    
+
     # Compute cumulative percentage (0-100%)
     n_points = len(sorted_errors)
     cumulative_percentage = np.arange(1, n_points + 1) / n_points * 100
-    
+
     return sorted_errors, cumulative_percentage
 
 
 def print_percentile_summary(error_pos: np.ndarray, error_vel: np.ndarray) -> None:
     """
     Print percentile summary of errors between OPTIMIZED and STANDARD.
-    
+
     Args:
         error_pos: Array of position errors (%)
         error_vel: Array of velocity errors (%)
     """
     percentiles = [10, 25, 50, 75, 90, 95, 99]
-    
+
     print("\n" + "="*70)
     print("ERROR PERCENTILE SUMMARY (OPTIMIZED vs STANDARD)")
     print("="*70)
-    
+
     print("\nPOSITION ERRORS:")
     print(f"{'Percentile':<15} {'Error Threshold (%)':<25} {'Interpretation'}")
     print("-" * 70)
     for pct in percentiles:
         threshold = np.percentile(error_pos, pct)
         print(f"{pct}th{'':<12} {threshold:<25.6f} {pct}% of points have error < {threshold:.6f}%")
-    
+
     print("\nVELOCITY ERRORS:")
     print(f"{'Percentile':<15} {'Error Threshold (%)':<25} {'Interpretation'}")
     print("-" * 70)
     for pct in percentiles:
         threshold = np.percentile(error_vel, pct)
         print(f"{pct}th{'':<12} {threshold:<25.6f} {pct}% of points have error < {threshold:.6f}%")
-    
+
     print("="*70 + "\n")
 
 
@@ -496,7 +494,7 @@ def main():
     dx, dy, dz = 5e-6, 1e-6, 1e-6
     dvx, dvy, dvz = 1e-7, 1e-7, 1e-7
 
-    vect_0 = np.array([x0, y0, z0, vx0, vy0, vz0])  
+    vect_0 = np.array([x0, y0, z0, vx0, vy0, vz0])
     domain_matrix = np.diag([dx, dy, dz, dvx, dvy, dvz])
     # DA initial state
     domain_DA = [
@@ -525,7 +523,7 @@ def main():
     print("=" * 70)
     print(f"mu = {mu}")
     print(f"Initial state: [{x0}, {y0}, {z0}, {vx0}, {vy0}, {vz0}]")
-    print(f"Uncertainty: position ~1e-6, velocity ~1e-7")
+    print("Uncertainty: position ~1e-6, velocity ~1e-7")
     print(f"Time span: {T0} → {TF}")
     print("=" * 70)
 
@@ -545,7 +543,7 @@ def main():
     t_elapsed_std = time.time() - t0_std
 
     n_domains_std = len(listOut_std)
-    
+
     print(f"✓ STANDARD - Time: {t_elapsed_std:.3f} s")
     print(f"✓ STANDARD - Final domains: {n_domains_std}")
 
@@ -565,7 +563,7 @@ def main():
     t_elapsed_opt = time.time() - t0_opt
 
     n_domains_opt = len(listOut_opt[-1])
-    
+
     print(f"✓ OPTIMIZED - Time: {t_elapsed_opt:.3f} s")
     print(f"✓ OPTIMIZED - Final domains: {n_domains_opt}")
     print(f"✓ Speedup: {t_elapsed_std / t_elapsed_opt:.2f}x")
@@ -650,7 +648,7 @@ def main():
     print("\n" + "=" * 70)
     print("GENERATING 3D VISUALIZATIONS")
     print("=" * 70)
-    
+
     print("\nGenerating OPTIMIZED 3D ADS box plots (final time)...")
     boxes_opt = ADS_utils.extract_ads_boxes_and_centers(
     final_states_opt,
@@ -688,28 +686,28 @@ def main():
     print("\n" + "=" * 70)
     print("ERROR ANALYSIS: OPTIMIZED vs STANDARD")
     print("=" * 70)
-    
+
     # Compute errors
     error_pos, error_vel = compute_expansion_errors(
         sample_points=sample_points,
         assignments_opt=assignments_opt,
         assignments_std=assignments_std
     )
-    
+
     # Print percentile summary
     print_percentile_summary(error_pos, error_vel)
-    
+
     # ======================================================================
     # 11. TAYLOR MAP EXTRACTION
     # ======================================================================
     print("\n" + "=" * 70)
     print("TAYLOR MAP EXTRACTION")
     print("=" * 70)
-    
+
     print("\nExtracting Taylor maps - OPTIMIZED...")
     taylor_maps_opt = ADS_utils.extract_all_taylor_maps(final_states_opt, DA_order=n_order_DA)
     print(f"✓ OPTIMIZED - Extracted {len(taylor_maps_opt)} Taylor maps")
-    
+
     print("\nExtracting Taylor maps - STANDARD...")
     taylor_maps_std = ADS_utils.extract_all_taylor_maps(final_states_std, DA_order=n_order_DA)
     print(f"✓ STANDARD - Extracted {len(taylor_maps_std)} Taylor maps")
@@ -717,12 +715,12 @@ def main():
     print("\n" + "=" * 70)
     print("ANALYSIS COMPLETE")
     print("=" * 70)
-    print(f"\nSummary:")
+    print("\nSummary:")
     print(f"  STANDARD:  {n_domains_std} domains in {t_elapsed_std:.3f} s")
     print(f"  OPTIMIZED: {n_domains_opt} domains in {t_elapsed_opt:.3f} s")
     print(f"  Speedup:   {t_elapsed_std / t_elapsed_opt:.2f}x")
     print("=" * 70)
-    
+
     plt.show()
 
 

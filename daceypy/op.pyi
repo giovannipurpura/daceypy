@@ -21,7 +21,6 @@ from numpy.typing import NDArray
 
 import daceypy
 
-
 def DA(x: Union[daceypy.DA, float, int]) -> daceypy.DA:
     """
     Converts a value to a DA object.

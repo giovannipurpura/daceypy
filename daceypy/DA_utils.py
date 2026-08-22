@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Union
+from collections import Counter
 from itertools import permutations
 from math import factorial
-from collections import Counter
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray

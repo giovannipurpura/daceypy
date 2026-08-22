@@ -1,6 +1,8 @@
 import itertools
 from typing import Any, Dict, List, Optional, Union
+
 import numpy as np
+
 from daceypy.DA_utils import extract_map
 
 
@@ -113,9 +115,9 @@ def assign_points_to_domains(
     """
     Assign physical points to the corresponding ADS sub-domains or patches.
 
-    This function determines the membership of discrete points within a set of 
-    partitioned Differential Algebra (DA) domains. It handles coordinate transformations 
-    between the global physical space and the local normalized (adimensional) 
+    This function determines the membership of discrete points within a set of
+    partitioned Differential Algebra (DA) domains. It handles coordinate transformations
+    between the global physical space and the local normalized (adimensional)
     coordinates of each patch.
 
     Parameters
@@ -186,9 +188,9 @@ def assign_points_to_domains(
         physical_origins = np.array([g["physical"]["origin"] for g in geometries], dtype=float)
         physical_corners = np.array([g["physical"]["corners"] for g in geometries], dtype=float)
         patch_axes = np.array([g["patch_axes"] for g in geometries], dtype=float)
-        
+
         point_to_domain = np.full(n_points, -1, dtype=np.int64)
-        
+
         # Transform physical points to the normalized global DA space
         rotated_points = (inv_domain_matrix @ (points_array - origin).T).T
 
@@ -253,7 +255,7 @@ def assign_points_to_domains(
                 [np.linalg.solve(patch_axes[d], x - physical_origins[d]) for x in physical_points],
                 dtype=float,
             )
-            
+
             entry: Dict = {
                 "domain_index": d,
                 "n_points": len(idx),
@@ -278,13 +280,13 @@ def assign_points_to_domains(
     return all_point_assignments[0] if not is_multiple_times else all_point_assignments
 
 def prepare_visualization_data(
-    ADS_domains: List[Any], 
-    points: np.ndarray, 
+    ADS_domains: List[Any],
+    points: np.ndarray,
     point_assignments: Optional[List[Dict]] = None
 ) -> Dict:
     """
     Prepare data structures for visualization and analysis.
-    
+
     Parameters
     ----------
     ADS_domains : list[ADSstate]
@@ -293,7 +295,7 @@ def prepare_visualization_data(
         Points that were assigned to domains
     point_assignments : list[dict], optional
         Output from assign_points_to_domains. If None, points will be assigned automatically.
-    
+
     Returns
     -------
     visualization_data : dict
@@ -308,15 +310,15 @@ def prepare_visualization_data(
     points_array: np.ndarray = np.asarray(points, dtype=np.float64)
     if points_array.ndim == 1:
         points_array = points_array.reshape(1, -1)
-    
+
     n_points: int
     ndim: int
     n_points, ndim = points_array.shape
-    
+
     # Extract ADS patches from domain objects
     patches: List[Any] = [domain.ADSPatch for domain in ADS_domains]
     n_domains: int = len(patches)
-    
+
     # Compute bounding boxes for all domains
     domain_boxes: List[Dict] = []
     for patch in patches:
@@ -333,7 +335,7 @@ def prepare_visualization_data(
             "center": 0.5 * (min_corner + max_corner),
             "manifold": patch.manifold
         })
-    
+
     # Build point-to-domain mapping
     point_to_domain: np.ndarray
 
@@ -362,13 +364,13 @@ def prepare_visualization_data(
             if any(is_inside):
                 candidate_indices: np.ndarray = np.where(is_inside)[0]
                 distances: List[float] = [
-                    np.linalg.norm(point - domain_boxes[idx]["center"]) 
+                    np.linalg.norm(point - domain_boxes[idx]["center"])
                     for idx in candidate_indices
                 ]
                 point_to_domain[i] = candidate_indices[np.argmin(distances)]
             else:
                 distances = [
-                    np.linalg.norm(point - box["center"]) 
+                    np.linalg.norm(point - box["center"])
                     for box in domain_boxes
                 ]
                 point_to_domain[i] = np.argmin(distances)
@@ -381,7 +383,7 @@ def prepare_visualization_data(
             if point_indices is None:
                 raise KeyError("point assignment must contain 'point_indices' or 'indices'")
             point_to_domain[point_indices] = domain_idx
-    
+
     # Prepare visualization data
     visualization_data: Dict = {
         "points": points_array,
@@ -390,19 +392,19 @@ def prepare_visualization_data(
         "n_domains": n_domains,
         "n_points": n_points
     }
-    
+
     return visualization_data
 
 
 def compute_assignment_statistics(visualization_data: Dict) -> Dict:
     """
     Calculate statistics about point-to-domain assignments.
-    
+
     Parameters
     ----------
     visualization_data : dict
         Output from prepare_visualization_data
-    
+
     Returns
     -------
     stats : dict
@@ -420,22 +422,22 @@ def compute_assignment_statistics(visualization_data: Dict) -> Dict:
     point_to_domain: np.ndarray = visualization_data['point_to_domain']
     n_domains: int = visualization_data['n_domains']
     n_points: int = visualization_data['n_points']
-    
+
     # Count points per domain
     points_per_domain: np.ndarray = np.array([
-        np.sum(point_to_domain == domain_idx) 
+        np.sum(point_to_domain == domain_idx)
         for domain_idx in range(n_domains)
     ], dtype=np.int64)
-    
+
     # Calculate statistics
     empty_domains: int = int(np.sum(points_per_domain == 0))
     occupied_domains: int = n_domains - empty_domains
-    
+
     occupied_counts: np.ndarray = points_per_domain[points_per_domain > 0]
     mean_points_occupied: float = float(np.mean(occupied_counts)) if occupied_domains > 0 else 0.0
     min_points_occupied: int = int(np.min(occupied_counts)) if occupied_domains > 0 else 0
     max_points: int = int(np.max(points_per_domain))
-    
+
     stats: Dict = {
         'n_domains': n_domains,
         'n_points': n_points,
@@ -447,25 +449,25 @@ def compute_assignment_statistics(visualization_data: Dict) -> Dict:
         'max_points_per_domain': max_points,
         'coverage_ratio': float(occupied_domains) / float(n_domains) if n_domains > 0 else 0.0
     }
-    
+
     return stats
 
 
 def print_assignment_statistics(visualization_data: Dict) -> None:
     """
     Print formatted statistics about point-to-domain assignments.
-    
+
     Parameters
     ----------
     visualization_data : dict
         Output from prepare_visualization_data
-    
+
     Returns
     -------
     None
     """
     stats: Dict = compute_assignment_statistics(visualization_data)
-    
+
     print("\n" + "="*70)
     print("Point-to-Domain Assignment Statistics")
     print("="*70)
@@ -478,13 +480,13 @@ def print_assignment_statistics(visualization_data: Dict) -> None:
     print(f"Min points (occupied domains):    {stats['min_points_per_occupied_domain']:6d}")
     print(f"Max points (any domain):          {stats['max_points_per_domain']:6d}")
     print("="*70)
-    
+
     # Show distribution histogram
     points_per_domain: np.ndarray = stats['points_per_domain']
     unique_counts: np.ndarray
     count_frequencies: np.ndarray
     unique_counts, count_frequencies = np.unique(points_per_domain, return_counts=True)
-    
+
     print("\nDistribution of points per domain:")
     print("-" * 70)
     max_freq: int = int(max(count_frequencies))
@@ -498,19 +500,19 @@ def print_assignment_statistics(visualization_data: Dict) -> None:
 
 
 def validate_point_assignments(
-    visualization_data: Dict, 
+    visualization_data: Dict,
     tolerance: float = 1e-10
 ) -> Dict:
     """
     Validate that all points are properly assigned to domains.
-    
+
     Parameters
     ----------
     visualization_data : dict
         Output from prepare_visualization_data
     tolerance : float, default=1e-10
         Tolerance for checking if point is inside domain bounding box
-    
+
     Returns
     -------
     validation : dict
@@ -524,21 +526,21 @@ def validate_point_assignments(
     points: np.ndarray = visualization_data['points']
     point_to_domain: np.ndarray = visualization_data['point_to_domain']
     domain_boxes: List[Dict] = visualization_data['domain_boxes']
-    
+
     n_unassigned: int = int(np.sum(point_to_domain == -1))
     n_outside_box: int = 0
-    
+
     for i, (point, domain_idx) in enumerate(zip(points, point_to_domain)):
         if 0 <= domain_idx < len(domain_boxes):
             box: Dict = domain_boxes[domain_idx]
             # Check if point is inside assigned domain box (with tolerance)
             is_inside: bool = bool(np.all(
-                (point >= box["min"] - tolerance) & 
+                (point >= box["min"] - tolerance) &
                 (point <= box["max"] + tolerance)
             ))
             if not is_inside:
                 n_outside_box += 1
-    
+
     validation: Dict = {
         'all_assigned': n_unassigned == 0,
         'n_unassigned': n_unassigned,
@@ -546,30 +548,30 @@ def validate_point_assignments(
         'total_points': len(points),
         'is_valid': (n_unassigned == 0) and (n_outside_box == 0)
     }
-    
+
     return validation
 
 
 def print_validation_report(
-    visualization_data: Dict, 
+    visualization_data: Dict,
     tolerance: float = 1e-10
 ) -> None:
     """
     Print a validation report for point-to-domain assignments.
-    
+
     Parameters
     ----------
     visualization_data : dict
         Output from prepare_visualization_data
     tolerance : float, default=1e-10
         Tolerance for validation checks
-    
+
     Returns
     -------
     None
     """
     validation: Dict = validate_point_assignments(visualization_data, tolerance)
-    
+
     print("\n" + "="*70)
     print("Assignment Validation Report")
     print("="*70)

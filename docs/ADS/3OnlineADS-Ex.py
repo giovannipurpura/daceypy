@@ -224,14 +224,14 @@ class AutomaticADS_TBP_integrator(ADSintegrator):
 
 # functions for figures
 def figure_1(
-        final_lists: List[List[ADS]], 
-        XF: NDArray[np.double], 
+        final_lists: List[List[ADS]],
+        XF: NDArray[np.double],
         XF6: NDArray[np.double],
-        Ns: int, 
-        perimeter_norm: NDArray[np.double], 
+        Ns: int,
+        perimeter_norm: NDArray[np.double],
         time_analysis: NDArray[np.int32],
         ) -> plt.Axes:
-    
+
     final_map_list = []
     final_domain_list = []
 
@@ -267,17 +267,17 @@ def figure_1(
         fig.suptitle(' Time of analysis : '+ str(time_analysis[i]), fontsize = 20)
 
 def figure_2(
-        final_lists: List[List[ADS]], 
-        XF: NDArray[np.double], 
+        final_lists: List[List[ADS]],
+        XF: NDArray[np.double],
         XF14: NDArray[np.double],
-        Ns: int, 
-        perimeter_norm: NDArray[np.double], 
+        Ns: int,
+        perimeter_norm: NDArray[np.double],
         time_analysis: NDArray[np.int32],
         ) -> plt.Axes:
-    
+
     final_map_list = []
     final_domain_list = []
-    
+
     for i in range(len(time_analysis)): # first interesting one is 16?
         final_manifold = np.zeros((4, perimeter_norm.shape[0], len(final_lists[i])))
         final_domain = np.zeros((4, perimeter_norm.shape[0], len(final_lists[i])))
@@ -310,12 +310,12 @@ def figure_2(
         fig.suptitle(' Time of analysis : '+ str(time_analysis[i]), fontsize = 20)
 
 def figure_3(
-        final_lists: List[List[ADSstate]], 
-        N0: int, 
-        T0: float, 
+        final_lists: List[List[ADSstate]],
+        N0: int,
+        T0: float,
         TF: float,
         ) -> plt.Axes:
-    
+
     uniqueTsplitList = np.sort(np.array(list(set([i for o in final_lists for i in o.splitTimes]))))
     a = np.zeros((uniqueTsplitList.size, len(final_lists)))
     for i in range(uniqueTsplitList.size):
@@ -325,7 +325,7 @@ def figure_3(
     multiplesplits = np.max(a, 1)
     splitgrid = N0 + np.cumsum(multiplesplits)
 
-    if T0 not in uniqueTsplitList: 
+    if T0 not in uniqueTsplitList:
         uniqueTsplitList = np.insert(uniqueTsplitList, 0, T0)
         splitgrid = np.insert(splitgrid, 0, N0)
 
@@ -487,7 +487,7 @@ def main():
     propagator_78.loadTol(20*1e-12, 1e-12)
     propagator_78.loadStepSize()
     propagator_78.loadADSopt(toll, Nmax)
-    
+
     listOut = propagator_78.propagate(init_list, T0, TFlocal)
 
     DomainList = [o.ADSPatch for o in listOut]

@@ -2,7 +2,6 @@ import daceypy_import_helper  # noqa: F401
 
 from typing import Callable, Type
 import numpy as np
-from numpy.typing import NDArray
 from daceypy import DA, array, RK, integrator, integrator_optimized, DA_utils
 import time
 mu = 398600.4418  # [km^3/s^2] Earth gravitational parameter, used by TBP()
