@@ -16,8 +16,7 @@ limitations under the License.
 
 from __future__ import annotations
 
-from typing import (List, Tuple, Union, Callable, Optional,
-                    overload)
+from typing import Callable, List, Optional, Tuple, Union, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -92,7 +91,12 @@ class ADS(metaclass=PrettyType):
         Raises:
             DACEException
         """
-        return np.sum(self.countSplits()) <= N_max
+        # The non-strict comparison is deliberate and must stay. canSplit is
+        # queried *before* the split, so a domain can reach ``N_max + 1``
+        # splits; that looks like an off-by-one but it is what the legacy C++
+        # ADS implementation does. The strict ``<`` used until v1.1.0 made
+        # DACEyPy disagree with it (issue #6, changed in v1.2.0).
+        return bool(np.sum(self.countSplits()) <= N_max)
 
     def countSplits(self) -> NDArray[np.int_]:
         """
@@ -234,7 +238,7 @@ class ADS(metaclass=PrettyType):
         Compute the center of the current domain.
 
         Returns:
-            The resulting domain center 
+            The resulting domain center
         """
         var = DA.getMaxVariables()
         # auxiliary variable for the initial center and width
@@ -252,7 +256,7 @@ class ADS(metaclass=PrettyType):
         Compute the width of the current domain.
 
         Returns:
-            The resulting domain width 
+            The resulting domain width
         """
         var = DA.getMaxVariables()
         size = len(self.nsplit)
@@ -260,7 +264,7 @@ class ADS(metaclass=PrettyType):
         for i in range(size):
             n = abs(self.nsplit[i]) - 1
             w[n] = 0.5*abs(w[n])
-        
+
         return w
 
     def contain(self, pt: NDArray[np.double]) -> bool:
@@ -290,7 +294,7 @@ class ADS(metaclass=PrettyType):
         N_max: int,
         fun: Callable[[ADS], ADS],
         type_: int = 0,
-        log_fun: Callable[[str]] = print,
+        log_fun: Callable[..., None] = print,
     ) -> List[ADS]:
         """
         Apply a transformation function to a list of ADS domains.
@@ -312,8 +316,10 @@ class ADS(metaclass=PrettyType):
             type_:
                 type of the norm to be used during split, see documentation for DA.estimNorm
             log_fun:
-                function invoked for progress and status logging,
-                to disable logging pass a no-op function (e.g., `lambda s: None`)
+                function invoked for progress and status logging;
+                it is called with several positional arguments, like
+                `print`, so to disable logging pass a variadic no-op
+                function (e.g., `lambda *args: None`)
 
         See also:
             DA.estimNorm
