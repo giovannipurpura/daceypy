@@ -36,7 +36,7 @@ installation on common Windows, Linux, and macOS systems.
 
 ## Installation
 
-DACEyPy requires Python 3.7 or newer and NumPy.
+DACEyPy requires Python 3.9 or newer and NumPy.
 
 ```bash
 pip install daceypy
@@ -45,12 +45,12 @@ pip install daceypy
 For local development from this repository:
 
 ```bash
-python -m pip install -e .
+python -m pip install -e ".[test]"
 ```
 
-Some documentation examples and ADS visualization helpers use optional
-scientific Python packages such as SciPy, Matplotlib, or Jupyter. They are not
-required for the core package import.
+The `test` extra adds pytest, plus the SciPy and Matplotlib that the
+documentation examples and the ADS visualization helpers use. The core
+package needs only NumPy.
 
 ## Supported Platforms
 
@@ -236,11 +236,14 @@ daceypy/
     differences.md           Differences from DACE C++
     ADS/                     ADS examples
     Tutorials/               Python translations of DACE C++ tutorials
+  tests/                     pytest suite
+  .github/workflows/ci.yml   Lint, type check, tests, packaging check
   README.md
+  CHANGELOG.md
+  CONTRIBUTING.md
   LICENSE
   NOTICE
-  pyproject.toml
-  setup.cfg
+  pyproject.toml             Packaging, pytest, ruff and mypy configuration
 ```
 
 
@@ -249,6 +252,14 @@ daceypy/
 See [`docs/index.md`](https://github.com/giovannipurpura/daceypy/blob/master/docs/index.md)
 for the full documentation entry point. The tutorials under `docs/Tutorials`
 include Python translations of the original DACE C++ tutorial material.
+
+## Contributing
+
+[`CONTRIBUTING.md`](https://github.com/giovannipurpura/daceypy/blob/master/CONTRIBUTING.md)
+covers the development setup, the checks that run in CI, and how pull requests
+are handled.
+[`CHANGELOG.md`](https://github.com/giovannipurpura/daceypy/blob/master/CHANGELOG.md)
+has the release history.
 
 ## Notes on DACE Compatibility
 
