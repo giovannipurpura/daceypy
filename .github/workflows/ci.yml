@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint and type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[lint]"
+      - name: ruff
+        run: ruff check daceypy tests docs
+      - name: mypy
+        run: mypy
+
+  test:
+    name: Tests (${{ matrix.os }}, py${{ matrix.python-version }}${{ matrix.numpy && format(', {0}', matrix.numpy) || '' }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        numpy: [""]
+        include:
+          # The bundled DACE binaries are per-platform, so each platform that
+          # ships a library must be exercised at least once.
+          - os: macos-latest
+            python-version: "3.12"
+            numpy: ""
+          - os: windows-latest
+            python-version: "3.12"
+            numpy: ""
+          # Both ends of the supported numpy range. numpy 2.5 changed
+          # numpy.typing.NDArray into a PEP 695 type alias, which used to break
+          # the import outright, so the upper end is worth pinning explicitly.
+          - os: ubuntu-latest
+            python-version: "3.12"
+            numpy: "numpy<2"
+          - os: ubuntu-latest
+            python-version: "3.12"
+            numpy: "numpy>=2.5"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package and test dependencies
+        run: pip install -e ".[test]"
+      - name: Pin numpy
+        if: matrix.numpy != ''
+        run: pip install "${{ matrix.numpy }}"
+      - name: Report environment
+        run: python -c "import numpy, daceypy; print('daceypy', daceypy.__version__, '| numpy', numpy.__version__)"
+      - name: Run tests
+        # The examples marked "slow" run in the slow-tests job instead.
+        run: pytest -m "not slow" -v
+        env:
+          MPLBACKEND: Agg
+
+  slow-tests:
+    name: Slow examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[test]"
+      - name: Run the slow examples
+        # Spelled out rather than left to the default marker expression in
+        # pyproject: a -m on the command line replaces it rather than adding
+        # to it, so "veryslow" has to be excluded here explicitly.
+        run: pytest -m "slow and not veryslow" -v
+        env:
+          MPLBACKEND: Agg
+
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build "twine>=6.1"
+      - run: python -m build
+      - name: Check metadata renders on PyPI
+        run: twine check dist/*
+      - name: Verify the built wheel imports from a clean environment
+        run: |
+          python -m venv /tmp/check
+          /tmp/check/bin/pip install dist/*.whl
+          cd /tmp && /tmp/check/bin/python -c "import daceypy; from daceypy import DA; DA.init(5, 2); print('ok', daceypy.__version__)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
