@@ -1,5 +1,8 @@
 .mypy_cache
+.ruff_cache
+.pytest_cache
 .DS_Store
 __pycache__
 build
+dist
 daceypy.egg-info
