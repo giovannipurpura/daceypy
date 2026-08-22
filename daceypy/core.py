@@ -14,8 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from ctypes import (POINTER, Structure, c_bool, c_char_p, c_double, c_int,
-                    c_uint, c_void_p, cdll)
+from ctypes import POINTER, Structure, c_bool, c_char_p, c_double, c_int, c_uint, c_void_p, cdll
 from inspect import getsourcefile
 from pathlib import Path
 from typing import Callable
@@ -35,7 +34,7 @@ except StopIteration:
         f"DACEyPy does not support this architecture ({system} {machine}).\n"
         "Supported architectures:\n" + "\n".join(
             " - " + lib.stem[5:].replace("-", " ")
-            for lib in libfolder.glob(f"dace_*")))
+            for lib in libfolder.glob("dace_*")))
 
 DAlib = cdll.LoadLibrary(str(library))
 

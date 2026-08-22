@@ -86,7 +86,9 @@ def main() -> None:
     final_domain = np.zeros((2, perimeter_norm.shape[0], len(final_list)))
     for j in range(len(final_list)):
         for k in range(perimeter_norm.shape[0]):
-            final_manifold[k, j] = final_list[j].manifold.eval(perimeter_norm[k, :])
+            # eval returns a one-element sequence here, and assigning that to
+            # a scalar slot is an error since numpy 2.0.
+            final_manifold[k, j] = final_list[j].manifold.eval(perimeter_norm[k, :])[0]
             final_domain[:, k, j] = final_list[j].box.eval(perimeter_norm[k, :])
 
     # plot figure

@@ -1,8 +1,8 @@
 # From: https://stackoverflow.com/a/71551501
 
 import platform
-import sysconfig
 import sys
+import sysconfig
 
 
 def get_platform():

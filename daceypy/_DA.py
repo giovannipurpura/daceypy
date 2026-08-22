@@ -17,10 +17,8 @@ limitations under the License.
 from __future__ import annotations
 
 import collections.abc
-from ctypes import (byref, c_double, c_int, c_uint, c_void_p, cast,
-                    create_string_buffer)
-from typing import (Any, List, Mapping, Optional, Sequence, Tuple, Union,
-                    overload)
+from ctypes import byref, c_double, c_int, c_uint, c_void_p, cast, create_string_buffer
+from typing import Any, List, Mapping, Optional, Sequence, Tuple, Union, overload
 
 import numpy as np
 from numpy.typing import NDArray

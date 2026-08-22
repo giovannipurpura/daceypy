@@ -17,8 +17,7 @@ limitations under the License.
 from __future__ import annotations
 
 from copy import copy
-from typing import (Any, List, Mapping, Optional, Sequence, Tuple, Union,
-                    overload)
+from typing import Any, List, Mapping, Optional, Sequence, Tuple, Union, cast, overload
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -28,21 +27,28 @@ import daceypy
 from ._PrettyType import PrettyType
 
 
-class array(NDArray[np.object_], metaclass=PrettyType):
+# The base must not be written as ``NDArray[np.object_]``: since numpy 2.5
+# that is a PEP 695 type alias, so using it as a base class resolves to the
+# alias itself, whose metaclass clashes with ``PrettyType``. This spelling
+# gives the same MRO on every supported numpy version.
+class array(np.ndarray[Any, np.dtype[np.object_]], metaclass=PrettyType):
     """
     N-dimensional array of DA objects.
     """
 
     def __new__(cls, input_array) -> array:
         arr = np.asarray(input_array, dtype=np.object_)
-        return number_to_DA_ufunc(arr).view(cls)
+        # frompyfunc is typed as returning either a scalar or an array;
+        # applied to an ndarray it always returns an array.
+        converted = cast(NDArray[np.object_], number_to_DA_ufunc(arr))
+        return converted.view(cls)
 
     def copy(self, order="K") -> array:
         """
         Create a copy of the DACEyPy array,
         creating a copy also of all the referenced DA objects.
         """
-        return DA_copy_ufunc(super().copy(order))
+        return cast("array", DA_copy_ufunc(super().copy(order)))
 
     __copy__ = copy
 
@@ -91,7 +97,9 @@ class array(NDArray[np.object_], metaclass=PrettyType):
         Derived from C++:
             `DA vnorm(const AlgebraicVector<DA> &obj)`
         """
-        return self.sqr().sum().sqrt().item()
+        # Summing an object array is typed as producing np.object_; an ndarray
+        # subclass keeps its type through a reduction, so this is a 0-d array.
+        return cast("array", self.sqr().sum()).sqrt().item()
 
     def normalize(self) -> array:
         """

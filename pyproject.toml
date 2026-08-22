@@ -1,3 +1,113 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "daceypy"
+description = "Python wrapper of DACE, the Differential Algebra Computational Toolbox."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Giovanni Purpura" }]
+dynamic = ["version"]
+dependencies = ["numpy>=1.20.0"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Natural Language :: English",
+    "Topic :: Scientific/Engineering",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS :: MacOS X",
+]
+
+[project.urls]
+Homepage = "https://github.com/giovannipurpura/daceypy"
+Source = "https://github.com/giovannipurpura/daceypy"
+Issues = "https://github.com/giovannipurpura/daceypy/issues"
+
+[project.optional-dependencies]
+# Everything needed to run the test suite, including the documented examples.
+test = ["pytest>=7.0", "matplotlib", "scipy"]
+# The linters are pinned so that a new ruff or mypy release cannot turn CI red
+# on an unrelated change, and so that a local run gives the same verdict as CI.
+# numpy is deliberately not pinned here: mypy should see the newest stubs,
+# since that is where type errors appear first.
+lint = ["ruff==0.16.4", "mypy==2.3.1"]
+
+[tool.setuptools]
+packages = ["daceypy"]
+
+[tool.setuptools.dynamic]
+version = { attr = "daceypy._version.__version__" }
+
+[tool.setuptools.package-data]
+daceypy = ["lib/*.so", "lib/*.dylib", "lib/*.dll"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The examples marked "veryslow" take tens of minutes; run them explicitly
+# with `pytest -m veryslow` or `pytest -m ""`.
+addopts = "-m 'not veryslow'"
+markers = [
+    "slow: takes more than a few seconds to run",
+    "veryslow: takes many minutes to run; deselected by default",
+]
+
+[tool.mypy]
+# No python_version pin: current mypy refuses targets below 3.10, while the
+# package still supports 3.9. Checking against the interpreter running in CI
+# is close enough, since the package uses no version-gated syntax.
+files = ["daceypy"]
+ignore_missing_imports = true
+
+# mypy is enforced, but not yet everywhere: the modules below carry a backlog
+# of ~134 annotation errors and are exempted, so that the ten already-clean
+# modules -- including _DA.py and _array.py, the bulk of the package -- are
+# protected against regressions. Removing entries is tracked cleanup work;
+# nothing should ever be added.
+[[tool.mypy.overrides]]
+module = [
+    "daceypy._ADSintegrator",
+    "daceypy._integrator",
+    "daceypy.core",
+    "daceypy.ADS_utils",
+    "daceypy.DA_utils",
+    "daceypy._ADS",
+    "daceypy.RK",
+]
+ignore_errors = true
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# Deliberately conservative, since this is the first time a linter runs over
+# this codebase: pyflakes (unused and undefined names), import sorting,
+# whitespace, and the pycodestyle checks that catch suspicious code rather
+# than formatting.
+#
+# E501 is not enforced yet: roughly fifty lines would need rewrapping,
+# including numeric Butcher tableaux in RK.py that read better long. That is
+# left as a separate, self-contained cleanup.
+select = ["E4", "E7", "E9", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+# The helper exists precisely to be imported for its side effect.
+"docs/**/daceypy_import_helper.py" = ["F401"]
+# The submodules import from the package itself, so the order in which they
+# are pulled in here is load-bearing: sorting it alphabetically raises
+# ImportError on a partially initialised module.
+"daceypy/__init__.py" = ["I001"]
+# I001: the examples import daceypy_import_helper for its side effect -- it
+#   puts the repository on sys.path -- so it must run before
+#   "from daceypy import ...". Their import order is load-bearing.
+# F841/E731: examples keep matplotlib axes handles around for readability even
+#   when the plotting calls that follow do not name them again.
+"docs/**/*.py" = ["I001", "F841", "E731"]
